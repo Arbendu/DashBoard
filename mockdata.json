@@ -1,0 +1,218 @@
+{
+  "header": {
+    "title": "Deposits Dashboard",
+    "subtitle": "Deposit portfolio overview and trend analysis",
+    "tabs": ["Deposits", "Loans"],
+    "activeTab": "Deposits",
+    "financialYear": "2025-26",
+    "financialYearOptions": ["2023-24", "2024-25", "2025-26"],
+    "dateRange": { "start": "27-Jul-2025", "end": "10-Aug-2025" }
+  },
+
+  "kpis": [
+    {
+      "id": "totalDeposits",
+      "label": "Total Deposits",
+      "value": "₹ 58.77 T",
+      "change": "+2.4%",
+      "trend": "up",
+      "icon": "coins",
+      "color": "#6C5CE0",
+      "bg": "#EDE7FF"
+    },
+    {
+      "id": "demandDeposits",
+      "label": "Demand Deposits",
+      "value": "₹ 22.42 T",
+      "change": "+3.1%",
+      "trend": "up",
+      "icon": "bank",
+      "color": "#EC4899",
+      "bg": "#FCE7F3"
+    },
+    {
+      "id": "termDeposits",
+      "label": "Term Deposits",
+      "value": "₹ 20.55 T",
+      "change": "+1.9%",
+      "trend": "up",
+      "icon": "file",
+      "color": "#3B82F6",
+      "bg": "#DBEAFE"
+    },
+    {
+      "id": "casaRatio",
+      "label": "CASA Ratio",
+      "value": "29.0%",
+      "change": "+0.8%",
+      "trend": "up",
+      "icon": "percent",
+      "color": "#A855F7",
+      "bg": "#F3E8FF"
+    }
+  ],
+
+  "casaTrend": {
+    "title": "TREND IN CASA RATIO",
+    "periods": ["Daily", "Weekly", "Monthly"],
+    "activePeriod": "Daily",
+    "unit": "%",
+    "highlight": { "date": "10-Aug-2025", "value": 36.72 },
+    "data": [
+      { "date": "27-Jul", "value": 37.05 },
+      { "date": "28-Jul", "value": 37.05 },
+      { "date": "29-Jul", "value": 36.95 },
+      { "date": "30-Jul", "value": 37.85 },
+      { "date": "31-Jul", "value": 37.42 },
+      { "date": "01-Aug", "value": 37.18 },
+      { "date": "02-Aug", "value": 37.10 },
+      { "date": "03-Aug", "value": 37.02 },
+      { "date": "07-Aug", "value": 36.95 },
+      { "date": "06-Aug", "value": 36.90 },
+      { "date": "02-Aug", "value": 36.85 },
+      { "date": "08-Aug", "value": 36.80 },
+      { "date": "09-Aug", "value": 36.75 },
+      { "date": "10-Aug", "value": 36.72 }
+    ]
+  },
+
+  "casaGauge": {
+    "title": "CASA Ratio",
+    "subtitle": "Current portfolio mix",
+    "value": 29.0,
+    "needlePercent": 68,
+    "centerLabel": "CASA Ratio",
+    "segments": [
+      { "name": "Current A/c", "value": 33, "color": "#22C55E" },
+      { "name": "Savings Bank A/c", "value": 34, "color": "#FACC15" },
+      { "name": "Others", "value": 33, "color": "#EF4444" }
+    ]
+  },
+
+  "depositsComposition": {
+    "title": "Deposits",
+    "subtitle": "Composition by category (₹ T)",
+    "filterOptions": ["All Deposits", "Demand Deposits", "Term Deposits"],
+    "activeFilter": "All Deposits",
+    "items": [
+      { "name": "Special Term Deposit", "value": 20.11, "share": 34.2, "color": "#22C55E" },
+      { "name": "Saving Bank A/c", "value": 14.93, "share": 25.4, "color": "#6C5CE0" },
+      { "name": "Term Deposit", "value": 19.05, "share": 32.4, "color": "#60A5FA" },
+      { "name": "Current A/c", "value": 5.20, "share": 8.9, "color": "#EC4899" },
+      { "name": "Other Term Deposits", "value": 0.46, "share": 0.8, "color": "#4338CA" }
+    ],
+    "legend": [
+      { "name": "Saving Bank A/c", "color": "#6C5CE0" },
+      { "name": "Current A/c", "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "color": "#FACC15" },
+      { "name": "Term Deposit", "color": "#22C55E" },
+      { "name": "Special Term Deposit", "color": "#166534" },
+      { "name": "Other Term Deposit", "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "color": "#FB923C" }
+    ]
+  },
+
+  "demandDeposits": {
+    "title": "Demand Deposits",
+    "dropdownOptions": ["Demand Deposits", "Term Deposits", "Total Deposits"],
+    "activeOption": "Demand Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 14.9346 T",
+    "data": [
+      { "name": "Saving Bank A/c", "value": 14.9346, "color": "#6C5CE0" },
+      { "name": "Current A/c", "value": 5.20, "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "value": 3.10, "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "value": 2.10, "color": "#FACC15" }
+    ]
+  },
+
+  "termDeposits": {
+    "title": "TERM DEPOSITS",
+    "dropdownOptions": ["Term Deposits", "Demand Deposits", "Total Deposits"],
+    "activeOption": "Term Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 19.0543 T",
+    "data": [
+      { "name": "Term Deposit", "value": 19.0543, "color": "#6C5CE0" },
+      { "name": "Special Term Deposit", "value": 2.5434, "color": "#EC4899" },
+      { "name": "Other Term Deposit", "value": 0.1493, "color": "#60A5FA" },
+      { "name": "Certificate of Deposit", "value": 0.0460, "color": "#FACC15" }
+    ]
+  },
+
+  "totalDepositsTrend": {
+    "title": "TOTAL DEPOSITS",
+    "periods": ["Daily", "Weekly", "Monthly"],
+    "activePeriod": "Daily",
+    "unit": "₹ T",
+    "highlight": { "date": "10-Aug-2025", "value": 57.70 },
+    "data": [
+      { "date": "27-Jul", "value": 56.9 },
+      { "date": "28-Jul", "value": 57.0 },
+      { "date": "29-Jul", "value": 57.55 },
+      { "date": "30-Jul", "value": 57.65 },
+      { "date": "31-Jul", "value": 57.4 },
+      { "date": "01-Aug", "value": 57.35 },
+      { "date": "02-Aug", "value": 57.25 },
+      { "date": "03-Aug", "value": 57.15 },
+      { "date": "06-Aug", "value": 57.05 },
+      { "date": "08-Aug", "value": 57.1 },
+      { "date": "09-Aug", "value": 57.15 },
+      { "date": "10-Aug", "value": 57.70 }
+    ]
+  },
+
+  "forecast": {
+    "title": "Special Term Deposit Forecast for next 7 Days",
+    "unit": "₹ Cr",
+    "legend": [
+      { "key": "actual", "name": "Actual", "color": "#6C5CE0", "dashed": false },
+      { "key": "forecast", "name": "Forecast", "color": "#EC4899", "dashed": true },
+      { "key": "lower", "name": "Lower Confidence Bound", "color": "#94A3B8", "dashed": true },
+      { "key": "upper", "name": "Upper Confidence Bound", "color": "#334155", "dashed": true }
+    ],
+    "data": [
+      { "date": "27-Jul", "actual": 2651000, "forecast": null, "lower": null, "upper": null },
+      { "date": "28-Jul", "actual": 2652500, "forecast": null, "lower": null, "upper": null },
+      { "date": "29-Jul", "actual": 2657000, "forecast": null, "lower": null, "upper": null },
+      { "date": "30-Jul", "actual": 2656500, "forecast": null, "lower": null, "upper": null },
+      { "date": "31-Jul", "actual": 2657500, "forecast": null, "lower": null, "upper": null },
+      { "date": "01-Aug", "actual": 2662000, "forecast": null, "lower": null, "upper": null },
+      { "date": "02-Aug", "actual": 2660000, "forecast": null, "lower": null, "upper": null },
+      { "date": "03-Aug", "actual": 2661500, "forecast": null, "lower": null, "upper": null },
+      { "date": "04-Aug", "actual": 2661000, "forecast": null, "lower": null, "upper": null },
+      { "date": "05-Aug", "actual": 2662500, "forecast": null, "lower": null, "upper": null },
+      { "date": "06-Aug", "actual": 2663500, "forecast": null, "lower": null, "upper": null },
+      { "date": "07-Aug", "actual": 2661000, "forecast": null, "lower": null, "upper": null },
+      { "date": "08-Aug", "actual": 2662000, "forecast": 2662000, "lower": 2662000, "upper": 2662000 },
+      { "date": "09-Aug", "actual": null, "forecast": 2665000, "lower": 2660500, "upper": 2669500 },
+      { "date": "13-Aug", "actual": null, "forecast": 2666000, "lower": 2661000, "upper": 2670500 },
+      { "date": "12-Aug", "actual": null, "forecast": 2667500, "lower": 2662500, "upper": 2672000 },
+      { "date": "14-Aug", "actual": null, "forecast": 2664500, "lower": 2659500, "upper": 2669000 },
+      { "date": "13-Aug", "actual": null, "forecast": 2666500, "lower": 2661500, "upper": 2671500 },
+      { "date": "17-Aug", "actual": null, "forecast": 2667000, "lower": 2662000, "upper": 2672500 }
+    ]
+  },
+
+  "insights": {
+    "title": "Insights",
+    "items": [
+      {
+        "icon": "trendUp",
+        "text": "Total deposits increased by 2.4%",
+        "subtext": "compared to previous period."
+      },
+      {
+        "icon": "users",
+        "text": "CASA ratio improved by 0.8%",
+        "subtext": ""
+      },
+      {
+        "icon": "bars",
+        "text": "Term deposits remain the largest",
+        "subtext": "component at ₹ 19.05 T (32.4%)."
+      }
+    ]
+  }
+}
