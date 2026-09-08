@@ -1,0 +1,112 @@
+{
+  "header": {
+    "title": "Deposits & Loans Dashboard",
+    "subtitle": "Portfolio overview by category",
+    "financialYear": "2025-26",
+    "financialYearOptions": ["2023-24", "2024-25", "2025-26"],
+    "dateRange": { "start": "27-Jul-2025", "end": "10-Aug-2025" }
+  },
+
+  "casaGauge": {
+    "title": "CASA Ratio",
+    "subtitle": "Current portfolio mix",
+    "value": 29.0,
+    "needlePercent": 68,
+    "centerLabel": "CASA Ratio",
+    "segments": [
+      { "name": "Current A/c", "value": 33, "color": "#22C55E" },
+      { "name": "Savings Bank A/c", "value": 34, "color": "#FACC15" },
+      { "name": "Others", "value": 33, "color": "#EF4444" }
+    ]
+  },
+
+  "depositsComposition": {
+    "title": "Deposits",
+    "subtitle": "Composition by category (₹ T)",
+    "filterOptions": ["All Deposits", "Demand Deposits", "Term Deposits"],
+    "activeFilter": "All Deposits",
+    "items": [
+      { "name": "Term Deposit", "value": 19.0543, "share": 40.4, "color": "#22C55E" },
+      { "name": "Saving Bank A/c", "value": 14.9346, "share": 31.7, "color": "#6C5CE0" },
+      { "name": "Current A/c", "value": 5.20, "share": 11.0, "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "value": 3.10, "share": 6.6, "color": "#60A5FA" },
+      { "name": "Special Term Deposit", "value": 2.5434, "share": 5.4, "color": "#166534" },
+      { "name": "Other Demand Deposit", "value": 2.10, "share": 4.5, "color": "#FACC15" },
+      { "name": "Other Term Deposit", "value": 0.1493, "share": 0.3, "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "value": 0.0460, "share": 0.1, "color": "#FB923C" }
+    ],
+    "legend": [
+      { "name": "Saving Bank A/c", "color": "#6C5CE0" },
+      { "name": "Current A/c", "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "color": "#FACC15" },
+      { "name": "Term Deposit", "color": "#22C55E" },
+      { "name": "Special Term Deposit", "color": "#166534" },
+      { "name": "Other Term Deposit", "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "color": "#FB923C" }
+    ]
+  },
+
+  "demandDeposits": {
+    "title": "Demand Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 14.9346 T",
+    "data": [
+      { "name": "Saving Bank A/c", "value": 14.9346, "color": "#6C5CE0" },
+      { "name": "Current A/c", "value": 5.20, "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "value": 3.10, "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "value": 2.10, "color": "#FACC15" }
+    ]
+  },
+
+  "termDeposits": {
+    "title": "Term Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 19.0543 T",
+    "data": [
+      { "name": "Term Deposit", "value": 19.0543, "color": "#22C55E" },
+      { "name": "Special Term Deposit", "value": 2.5434, "color": "#166534" },
+      { "name": "Other Term Deposit", "value": 0.1493, "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "value": 0.0460, "color": "#FB923C" }
+    ]
+  },
+
+  "loansComposition": {
+    "title": "Loans",
+    "subtitle": "Composition by category (₹ T)",
+    "items": [
+      { "name": "Term Loan", "value": 14.00, "share": 35.0, "color": "#6C5CE0" },
+      { "name": "Cash Credit", "value": 9.00, "share": 22.5, "color": "#EC4899" },
+      { "name": "Demand Loan", "value": 6.50, "share": 16.25, "color": "#60A5FA" },
+      { "name": "Overdraft", "value": 5.00, "share": 12.5, "color": "#FACC15" },
+      { "name": "Agri Term Loan", "value": 3.00, "share": 7.5, "color": "#22C55E" },
+      { "name": "Agri Cash Credit", "value": 2.00, "share": 5.0, "color": "#4338CA" },
+      { "name": "Bills Payable", "value": 0.50, "share": 1.25, "color": "#FB923C" }
+    ],
+    "legend": [
+      { "name": "Bills Payable", "color": "#FB923C" },
+      { "name": "Demand Loan", "color": "#60A5FA" },
+      { "name": "Cash Credit", "color": "#EC4899" },
+      { "name": "Agri Cash Credit", "color": "#4338CA" },
+      { "name": "Overdraft", "color": "#FACC15" },
+      { "name": "Term Loan", "color": "#6C5CE0" },
+      { "name": "Agri Term Loan", "color": "#22C55E" }
+    ]
+  },
+
+  "loansBreakdown": {
+    "title": "Loans",
+    "unit": "₹ T",
+    "topValue": "₹ 14.00 T",
+    "data": [
+      { "name": "Bills Payable", "value": 0.50, "color": "#FB923C" },
+      { "name": "Demand Loan", "value": 6.50, "color": "#60A5FA" },
+      { "name": "Cash Credit", "value": 9.00, "color": "#EC4899" },
+      { "name": "Agri Cash Credit", "value": 2.00, "color": "#4338CA" },
+      { "name": "Overdraft", "value": 5.00, "color": "#FACC15" },
+      { "name": "Term Loan", "value": 14.00, "color": "#6C5CE0" },
+      { "name": "Agri Term Loan", "value": 3.00, "color": "#22C55E" }
+    ]
+  }
+}
+
