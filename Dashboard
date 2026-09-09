@@ -1,1 +1,1052 @@
+import React, { useState } from "react";
+import {
+  Box,
+  Paper,
+  Stack,
+  Typography,
+  Select,
+  MenuItem,
+  Button,
+  Chip,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import CalendarTodayRoundedIcon from "@mui/icons-material/CalendarTodayRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import EqualizerRoundedIcon from "@mui/icons-material/EqualizerRounded";
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  LabelList,
+} from "recharts";
+
+import { theme } from "./theme";
+import { fetchDrilldown } from "./dataProvider";
+import defaultDashboardData from "./mockdata.json";
+
+/* ---------------------------------------------------------------------- */
+/*  Shared style helpers — pulled straight from theme.js. No               */
+/*  ThemeProvider / theme context anywhere in this file.                   */
+/* ---------------------------------------------------------------------- */
+
+const textPrimarySx = {
+  fontFamily: theme.typography.fontFamily,
+  color: theme.colors.textPrimary,
+};
+
+const textSecondarySx = {
+  fontFamily: theme.typography.fontFamily,
+  color: theme.colors.textSecondary,
+};
+
+const gridStrokeColor = "rgba(30, 27, 58, 0.08)";
+
+/* ---------------------------------------------------------------------- */
+/*  Glass primitives                                                       */
+/* ---------------------------------------------------------------------- */
+
+/** Reusable glass "card" surface. Every panel in the dashboard sits on one
+ * of these — swap the tokens in theme.js and the whole UI re-skins. */
+function GlassPanel({ children, sx, ...props }) {
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: 2.5,
+        borderRadius: theme.radius.card,
+        height: "100%",
+        background: theme.glass.background,
+        backdropFilter: theme.glass.blur,
+        WebkitBackdropFilter: theme.glass.blur,
+        border: theme.glass.border,
+        boxShadow: `${theme.glass.shadow}, ${theme.glass.innerHairline}`,
+        transition: "box-shadow 0.25s ease, transform 0.25s ease",
+        ...sx,
+      }}
+      {...props}
+    >
+      {children}
+    </Paper>
+  );
+}
+
+function PanelHeader({ icon: Icon, title, action, iconColor = theme.colors.primary }) {
+  return (
+    <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        {Icon && (
+          <Box
+            sx={{
+              width: 34,
+              height: 34,
+              borderRadius: "10px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: alpha(iconColor, 0.14),
+              color: iconColor,
+              backdropFilter: theme.glass.blurSoft,
+            }}
+          >
+            <Icon sx={{ fontSize: 19 }} />
+          </Box>
+        )}
+        <Typography sx={{ ...textPrimarySx, fontWeight: 800, fontSize: 15, letterSpacing: 0.2 }}>
+          {title}
+        </Typography>
+      </Stack>
+      {action}
+    </Stack>
+  );
+}
+
+function MiniSelect({ options, value, onChange }) {
+  return (
+    <Select
+      size="small"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      sx={{
+        ...textPrimarySx,
+        fontSize: 13,
+        fontWeight: 600,
+        borderRadius: theme.radius.control,
+        background: theme.glass.backgroundSubtle,
+        backdropFilter: theme.glass.blurSoft,
+        "& .MuiOutlinedInput-notchedOutline": { border: theme.glass.borderSubtle },
+        "& .MuiSelect-select": { py: 0.75, pr: 4 },
+      }}
+    >
+      {options.map((opt) => (
+        <MenuItem key={opt} value={opt} sx={{ fontSize: 13, fontFamily: theme.typography.fontFamily }}>
+          {opt}
+        </MenuItem>
+      ))}
+    </Select>
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <Typography
+      sx={{
+        ...textPrimarySx,
+        fontSize: { xs: 17, md: 19 },
+        fontWeight: 800,
+        mb: 1.75,
+        mt: 0.5,
+        pl: 0.5,
+        borderLeft: `4px solid ${theme.colors.primary}`,
+        lineHeight: 1.4,
+      }}
+    >
+      &nbsp;{children}
+    </Typography>
+  );
+}
+
+/** Small pill button used to leave a drill-down and return to the parent
+ * chart. Purely presentational — callers pass the `onBack` handler. */
+function BackButton({ onBack }) {
+  return (
+    <Button
+      size="small"
+      onClick={onBack}
+      startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 16 }} />}
+      sx={{
+        textTransform: "none",
+        fontWeight: 700,
+        fontSize: 12.5,
+        borderRadius: theme.radius.control,
+        color: theme.colors.primary,
+        bgcolor: alpha(theme.colors.primary, 0.1),
+        "&:hover": { bgcolor: alpha(theme.colors.primary, 0.18) },
+      }}
+    >
+      Back
+    </Button>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Reusable drill-down bar chart — knows nothing about deposits/loans,    */
+/*  just renders whatever { title, subtitle, data } it's handed.          */
+/* ---------------------------------------------------------------------- */
+
+function DrilldownBarChart({ icon, config, onBack }) {
+  const longLabels = config.data.length > 5;
+
+  return (
+    <>
+      <PanelHeader icon={icon} title={config.title} action={<BackButton onBack={onBack} />} />
+      {config.subtitle && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>
+          {config.subtitle}
+        </Typography>
+      )}
+      <Box sx={{ width: "100%", height: longLabels ? 300 : 260 }}>
+        <ResponsiveContainer>
+          <BarChart
+            data={config.data}
+            margin={{ top: 24, right: 10, left: -10, bottom: longLabels ? 60 : 0 }}
+            barCategoryGap="28%"
+          >
+            <CartesianGrid vertical={false} stroke={gridStrokeColor} />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: longLabels ? 9.5 : 10.5, fill: theme.colors.textSecondary }}
+              axisLine={{ stroke: gridStrokeColor }}
+              tickLine={false}
+              interval={0}
+              angle={longLabels ? -35 : 0}
+              textAnchor={longLabels ? "end" : "middle"}
+              height={longLabels ? 70 : 30}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: theme.colors.textSecondary }}
+              axisLine={false}
+              tickLine={false}
+              width={32}
+            />
+            <Bar dataKey="value" radius={[8, 8, 0, 0]} maxBarSize={54}>
+              {config.data.map((d, i) => (
+                <Cell key={i} fill={d.color} />
+              ))}
+              <LabelList
+                dataKey="value"
+                position="top"
+                formatter={(v) => `₹${v < 1 ? v.toFixed(4) : v}T`}
+                style={{ fontSize: 11.5, fontWeight: 800, fill: theme.colors.textPrimary }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  CASA Gauge (semi-donut + needle) built with Recharts Pie               */
+/* ---------------------------------------------------------------------- */
+
+function Gauge({ config }) {
+  const RADIAN = Math.PI / 180;
+  const cx = 150;
+  const cy = 150;
+  const innerR = 92;
+
+  const needleAngle = 180 - (config.needlePercent / 100) * 180; // 0..180 -> deg
+
+  return (
+    <GlassPanel>
+      <PanelHeader icon={PieChartRoundedIcon} title={config.title} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1 }}>
+        {config.subtitle}
+      </Typography>
+
+      <Box sx={{ position: "relative", width: "100%", height: 210 }}>
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={config.segments}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="85%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={92}
+              outerRadius={130}
+              paddingAngle={2}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              {config.segments.map((s, i) => (
+                <Cell key={i} fill={s.color} />
+              ))}
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* needle + center readout, overlaid absolutely */}
+        <Box sx={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          <svg viewBox="0 0 300 300" width="100%" height="100%">
+            <circle cx={cx} cy={cy * 0.85 + 0} r="7" fill={theme.colors.textPrimary} />
+            <line
+              x1={cx}
+              y1={cy * 0.85}
+              x2={cx + (innerR - 6) * Math.cos(needleAngle * RADIAN)}
+              y2={cy * 0.85 - (innerR - 6) * Math.sin(needleAngle * RADIAN)}
+              stroke={theme.colors.textPrimary}
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Box>
+
+        <Box sx={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center" }}>
+          <Typography sx={{ ...textPrimarySx, fontSize: 30, fontWeight: 800, lineHeight: 1.1 }}>
+            {config.value.toFixed(1)}%
+          </Typography>
+          <Typography sx={{ ...textSecondarySx, fontSize: 13, fontWeight: 600 }}>
+            {config.centerLabel}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Stack direction="row" spacing={2.5} justifyContent="center" flexWrap="wrap" sx={{ mt: 1 }}>
+        {config.segments.map((s) => (
+          <Stack key={s.name} direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: s.color }} />
+            <Typography sx={{ ...textSecondarySx, fontSize: 12, fontWeight: 600 }}>{s.name}</Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </GlassPanel>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Composition mosaic (used for both Deposits and Loans)                  */
+/*  Every tile is clickable — clicking drills into that category, and     */
+/*  only this panel re-renders; the rest of the dashboard is untouched.   */
+/* ---------------------------------------------------------------------- */
+
+function CompositionMosaic({ config, icon = Inventory2RoundedIcon }) {
+  const hasFilter = Array.isArray(config.filterOptions) && config.filterOptions.length > 0;
+  const [filter, setFilter] = useState(config.activeFilter || (hasFilter ? config.filterOptions[0] : undefined));
+  const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
+  const items = config.items;
+  const [big1, big2, big3, ...rest] = items;
+
+  const handleTileClick = (item) => {
+    fetchDrilldown(item.name).then((result) => {
+      if (result) setDrilldown(result);
+    });
+  };
+
+  const Tile = ({ item, sx }) => (
+    <Box
+      onClick={() => handleTileClick(item)}
+      role="button"
+      tabIndex={0}
+      sx={{
+        borderRadius: theme.radius.tile,
+        p: 1.5,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        bgcolor: item.color,
+        color: "#fff",
+        minHeight: 70,
+        cursor: "pointer",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        "&:hover": { transform: "translateY(-2px)", boxShadow: "0 10px 24px rgba(0,0,0,0.2)" },
+        ...sx,
+      }}
+    >
+      <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: 12.5, fontWeight: 700, opacity: 0.95, lineHeight: 1.2 }}>
+        {item.name}
+      </Typography>
+      <Box>
+        <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: 16, fontWeight: 800 }}>
+          ₹ {item.value.toFixed(2)} T
+        </Typography>
+        <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: 11, opacity: 0.9 }}>
+          {item.share}%
+        </Typography>
+      </Box>
+    </Box>
+  );
+
+  if (drilldown) {
+    return (
+      <GlassPanel>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel>
+      <PanelHeader
+        icon={icon}
+        title={config.title}
+        action={hasFilter ? <MiniSelect options={config.filterOptions} value={filter} onChange={setFilter} /> : undefined}
+      />
+      <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography>
+
+      <Box sx={{ display: "flex", gap: 1, height: 190 }}>
+        <Tile item={big1} sx={{ flex: 1.3 }} />
+        <Tile item={big2} sx={{ flex: 1.1 }} />
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 1 }}>
+          <Tile item={big3} sx={{ flex: 1 }} />
+          <Box sx={{ display: "flex", gap: 1, flex: 1 }}>
+            {rest.map((r) => (
+              <Tile key={r.name} item={r} sx={{ flex: 1, "& .MuiTypography-root": { fontSize: 10.5 } }} />
+            ))}
+          </Box>
+        </Box>
+      </Box>
+
+      <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 0.75, columnGap: 2 }}>
+        {config.legend.map((l) => (
+          <Stack key={l.name} direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 9, height: 9, borderRadius: "3px", bgcolor: l.color, flexShrink: 0 }} />
+            <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 600 }}>{l.name}</Typography>
+          </Stack>
+        ))}
+      </Box>
+    </GlassPanel>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Bar chart panels (Demand / Term deposits, Loans breakdown)             */
+/*  Clicking a bar drills into that item; only this panel swaps content.  */
+/* ---------------------------------------------------------------------- */
+
+function BarPanel({ icon, config }) {
+  const hasDropdown = Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
+  const [option, setOption] = useState(config.activeOption || (hasDropdown ? config.dropdownOptions[0] : undefined));
+  const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
+  const longLabels = config.data.length > 5;
+
+  const handleBarClick = (item) => {
+    fetchDrilldown(item.name).then((result) => {
+      if (result) setDrilldown(result);
+    });
+  };
+
+  if (drilldown) {
+    return (
+      <GlassPanel>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel>
+      <PanelHeader
+        icon={icon}
+        title={config.title}
+        action={hasDropdown ? <MiniSelect options={config.dropdownOptions} value={option} onChange={setOption} /> : undefined}
+      />
+      <Box sx={{ width: "100%", height: longLabels ? 300 : 260 }}>
+        <ResponsiveContainer>
+          <BarChart
+            data={config.data}
+            margin={{ top: 24, right: 10, left: -10, bottom: longLabels ? 60 : 0 }}
+            barCategoryGap="28%"
+          >
+            <CartesianGrid vertical={false} stroke={gridStrokeColor} />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: longLabels ? 9.5 : 10.5, fill: theme.colors.textSecondary }}
+              axisLine={{ stroke: gridStrokeColor }}
+              tickLine={false}
+              interval={0}
+              angle={longLabels ? -35 : 0}
+              textAnchor={longLabels ? "end" : "middle"}
+              height={longLabels ? 70 : 30}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: theme.colors.textSecondary }}
+              axisLine={false}
+              tickLine={false}
+              width={32}
+            />
+            <Bar dataKey="value" radius={[8, 8, 0, 0]} maxBarSize={54}>
+              {config.data.map((d, i) => (
+                <Cell
+                  key={i}
+                  fill={d.color}
+                  cursor="pointer"
+                  onClick={() => handleBarClick(d)}
+                />
+              ))}
+              <LabelList
+                dataKey="value"
+                position="top"
+                formatter={(v) => `₹${v < 1 ? v.toFixed(4) : v}T`}
+                style={{ fontSize: 11.5, fontWeight: 800, fill: theme.colors.textPrimary }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </GlassPanel>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Header                                                                  */
+/* ---------------------------------------------------------------------- */
+
+function DashboardHeader({ config }) {
+  const [fy, setFy] = useState(config.financialYear);
+
+  return (
+    <Box sx={{ position: "relative", mb: 2.5, px: { xs: 0.5, md: 1 }, py: { xs: 2, md: 2.5 } }}>
+      <Stack
+        direction={{ xs: "column", lg: "row" }}
+        alignItems={{ xs: "flex-start", lg: "center" }}
+        justifyContent="space-between"
+        spacing={2}
+      >
+        <Box>
+          <Typography sx={{ ...textPrimarySx, fontSize: { xs: 22, md: 26 }, fontWeight: 800 }}>
+            {config.title}
+          </Typography>
+          <Typography sx={{ ...textSecondarySx, fontSize: 13.5, mt: 0.25 }}>{config.subtitle}</Typography>
+        </Box>
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems="center" flexWrap="wrap">
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography sx={{ ...textSecondarySx, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}>
+              Financial Year
+            </Typography>
+            <MiniSelect options={config.financialYearOptions} value={fy} onChange={setFy} />
+          </Stack>
+
+          <Chip
+            icon={<CalendarTodayRoundedIcon sx={{ fontSize: "16px !important" }} />}
+            label={`${config.dateRange.start}  ~  ${config.dateRange.end}`}
+            sx={{
+              ...textPrimarySx,
+              background: theme.glass.backgroundSubtle,
+              backdropFilter: theme.glass.blurSoft,
+              border: theme.glass.borderSubtle,
+              fontWeight: 600,
+              fontSize: 12.5,
+              px: 0.5,
+              height: 36,
+              borderRadius: theme.radius.control,
+            }}
+          />
+
+          <Button
+            variant="contained"
+            startIcon={<RefreshRoundedIcon />}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: 13.5,
+              borderRadius: theme.radius.control,
+              boxShadow: "none",
+              px: 2,
+              height: 36,
+              bgcolor: theme.colors.primary,
+              color: theme.colors.onPrimary,
+              "&:hover": { boxShadow: "none", bgcolor: theme.colors.primaryDark },
+            }}
+          >
+            Reset
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Root Dashboard                                                         */
+/* ---------------------------------------------------------------------- */
+
+export default function Dashboard({ data = defaultDashboardData }) {
+  // `data` still defaults to the static mock file so existing callers of
+  // <Dashboard /> don't break, but the shell itself is ready to load from
+  // fetchDashboardData() (dataProvider.js) once an API is wired up:
+  //
+  //   const [data, setData] = useState(null);
+  //   useEffect(() => { fetchDashboardData().then(setData); }, []);
+  //   if (!data) return <LoadingState />;
+
+  return (
+    <Box
+      sx={{
+        minHeight: "100vh",
+        p: { xs: 1.5, md: 3 },
+        fontFamily: theme.typography.fontFamily,
+        // no background color here — the app's own bg.svg (set globally,
+        // e.g. on <body>) shows through the translucent glass panels.
+      }}
+    >
+      <DashboardHeader config={data.header} />
+
+      {/* ==================== DEPOSITS ==================== */}
+      <SectionTitle>Deposits</SectionTitle>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "1fr 1.6fr" },
+          gap: 2.5,
+          mb: 2.5,
+          alignItems: "stretch",
+        }}
+      >
+        <Gauge config={data.casaGauge} />
+        <CompositionMosaic config={data.depositsComposition} icon={Inventory2RoundedIcon} />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" },
+          gap: 2.5,
+          mb: { xs: 3, lg: 4.5 },
+          alignItems: "stretch",
+        }}
+      >
+        <BarPanel icon={AccountBalanceWalletRoundedIcon} config={data.demandDeposits} />
+        <BarPanel icon={DescriptionRoundedIcon} config={data.termDeposits} />
+      </Box>
+
+      {/* ==================== LOANS ==================== */}
+      <SectionTitle>Loans</SectionTitle>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "1.2fr 1fr" },
+          gap: 2.5,
+          alignItems: "stretch",
+        }}
+      >
+        <CompositionMosaic config={data.loansComposition} icon={AccountBalanceRoundedIcon} />
+        <BarPanel icon={EqualizerRoundedIcon} config={data.loansBreakdown} />
+      </Box>
+    </Box>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * dataProvider.js — data access layer.
+ *
+ * Reusable chart/card components never import mockdata.json directly and
+ * never know whether their data came from a static file or a network call.
+ * They only call the functions exported here. When the backend is ready,
+ * replace the bodies below with real `fetch`/axios calls (keeping the same
+ * function names and return shapes) and no other file needs to change.
+ */
+
+import dashboardData from "./mockdata.json";
+
+/**
+ * Fetch the full dashboard payload (header, gauge, composition + bar chart
+ * configs). Returns a Promise so callers don't need to change when this
+ * becomes a real network request.
+ */
+export function fetchDashboardData() {
+  return Promise.resolve(dashboardData);
+}
+
+/**
+ * Fetch drill-down data for a single chart item (e.g. "Term Deposit",
+ * "Term Loan"). Looks the item up in the shared `drilldowns` map, which is
+ * keyed by item name so the same entry can be reused by both the
+ * composition mosaic tiles and the bar charts.
+ *
+ * Returns a Promise<{ title, subtitle, data } | null> — `null` means no
+ * drill-down is available for that item, and callers should leave the
+ * current view as-is.
+ *
+ * Example future replacement:
+ *   export function fetchDrilldown(itemName) {
+ *     return fetch(`/api/dashboard/drilldown?item=${encodeURIComponent(itemName)}`)
+ *       .then((res) => (res.ok ? res.json() : null));
+ *   }
+ */
+export function fetchDrilldown(itemName) {
+  const entry = dashboardData.drilldowns?.[itemName] ?? null;
+  return Promise.resolve(entry);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{
+  "header": {
+    "title": "Deposits & Loans Dashboard",
+    "subtitle": "Portfolio overview by category",
+    "financialYear": "2025-26",
+    "financialYearOptions": ["2023-24", "2024-25", "2025-26"],
+    "dateRange": { "start": "27-Jul-2025", "end": "10-Aug-2025" }
+  },
+
+  "casaGauge": {
+    "title": "CASA Ratio",
+    "subtitle": "Current portfolio mix",
+    "value": 29.0,
+    "needlePercent": 68,
+    "centerLabel": "CASA Ratio",
+    "segments": [
+      { "name": "Current A/c", "value": 33, "color": "#22C55E" },
+      { "name": "Savings Bank A/c", "value": 34, "color": "#FACC15" },
+      { "name": "Others", "value": 33, "color": "#EF4444" }
+    ]
+  },
+
+  "depositsComposition": {
+    "title": "Deposits",
+    "subtitle": "Composition by category (₹ T)",
+    "filterOptions": ["All Deposits", "Demand Deposits", "Term Deposits"],
+    "activeFilter": "All Deposits",
+    "items": [
+      { "name": "Term Deposit", "value": 19.0543, "share": 40.4, "color": "#22C55E" },
+      { "name": "Saving Bank A/c", "value": 14.9346, "share": 31.7, "color": "#6C5CE0" },
+      { "name": "Current A/c", "value": 5.20, "share": 11.0, "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "value": 3.10, "share": 6.6, "color": "#60A5FA" },
+      { "name": "Special Term Deposit", "value": 2.5434, "share": 5.4, "color": "#166534" },
+      { "name": "Other Demand Deposit", "value": 2.10, "share": 4.5, "color": "#FACC15" },
+      { "name": "Other Term Deposit", "value": 0.1493, "share": 0.3, "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "value": 0.0460, "share": 0.1, "color": "#FB923C" }
+    ],
+    "legend": [
+      { "name": "Saving Bank A/c", "color": "#6C5CE0" },
+      { "name": "Current A/c", "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "color": "#FACC15" },
+      { "name": "Term Deposit", "color": "#22C55E" },
+      { "name": "Special Term Deposit", "color": "#166534" },
+      { "name": "Other Term Deposit", "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "color": "#FB923C" }
+    ]
+  },
+
+  "demandDeposits": {
+    "title": "Demand Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 14.9346 T",
+    "data": [
+      { "name": "Saving Bank A/c", "value": 14.9346, "color": "#6C5CE0" },
+      { "name": "Current A/c", "value": 5.20, "color": "#EC4899" },
+      { "name": "Cash Credit Cr Balance", "value": 3.10, "color": "#60A5FA" },
+      { "name": "Other Demand Deposit", "value": 2.10, "color": "#FACC15" }
+    ]
+  },
+
+  "termDeposits": {
+    "title": "Term Deposits",
+    "unit": "₹ T",
+    "topValue": "₹ 19.0543 T",
+    "data": [
+      { "name": "Term Deposit", "value": 19.0543, "color": "#22C55E" },
+      { "name": "Special Term Deposit", "value": 2.5434, "color": "#166534" },
+      { "name": "Other Term Deposit", "value": 0.1493, "color": "#4338CA" },
+      { "name": "Certificate of Deposit", "value": 0.0460, "color": "#FB923C" }
+    ]
+  },
+
+  "loansComposition": {
+    "title": "Loans",
+    "subtitle": "Composition by category (₹ T)",
+    "items": [
+      { "name": "Term Loan", "value": 14.00, "share": 35.0, "color": "#6C5CE0" },
+      { "name": "Cash Credit", "value": 9.00, "share": 22.5, "color": "#EC4899" },
+      { "name": "Demand Loan", "value": 6.50, "share": 16.25, "color": "#60A5FA" },
+      { "name": "Overdraft", "value": 5.00, "share": 12.5, "color": "#FACC15" },
+      { "name": "Agri Term Loan", "value": 3.00, "share": 7.5, "color": "#22C55E" },
+      { "name": "Agri Cash Credit", "value": 2.00, "share": 5.0, "color": "#4338CA" },
+      { "name": "Bills Payable", "value": 0.50, "share": 1.25, "color": "#FB923C" }
+    ],
+    "legend": [
+      { "name": "Bills Payable", "color": "#FB923C" },
+      { "name": "Demand Loan", "color": "#60A5FA" },
+      { "name": "Cash Credit", "color": "#EC4899" },
+      { "name": "Agri Cash Credit", "color": "#4338CA" },
+      { "name": "Overdraft", "color": "#FACC15" },
+      { "name": "Term Loan", "color": "#6C5CE0" },
+      { "name": "Agri Term Loan", "color": "#22C55E" }
+    ]
+  },
+
+  "loansBreakdown": {
+    "title": "Loans",
+    "unit": "₹ T",
+    "topValue": "₹ 14.00 T",
+    "data": [
+      { "name": "Bills Payable", "value": 0.50, "color": "#FB923C" },
+      { "name": "Demand Loan", "value": 6.50, "color": "#60A5FA" },
+      { "name": "Cash Credit", "value": 9.00, "color": "#EC4899" },
+      { "name": "Agri Cash Credit", "value": 2.00, "color": "#4338CA" },
+      { "name": "Overdraft", "value": 5.00, "color": "#FACC15" },
+      { "name": "Term Loan", "value": 14.00, "color": "#6C5CE0" },
+      { "name": "Agri Term Loan", "value": 3.00, "color": "#22C55E" }
+    ]
+  },
+
+  "drilldowns": {
+    "Term Deposit": {
+      "title": "Term Deposit — By Tenure",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "0-1 Yr", "value": 6.02, "color": "#22C55E" },
+        { "name": "1-3 Yr", "value": 7.50, "color": "#16A34A" },
+        { "name": "3-5 Yr", "value": 4.03, "color": "#166534" },
+        { "name": "5+ Yr", "value": 1.50, "color": "#14532D" }
+      ]
+    },
+    "Saving Bank A/c": {
+      "title": "Saving Bank A/c — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Retail", "value": 9.20, "color": "#6C5CE0" },
+        { "name": "Corporate", "value": 3.10, "color": "#8B7CF6" },
+        { "name": "Government", "value": 1.63, "color": "#5847C9" },
+        { "name": "NRI", "value": 1.0046, "color": "#4338CA" }
+      ]
+    },
+    "Current A/c": {
+      "title": "Current A/c — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Retail", "value": 1.80, "color": "#EC4899" },
+        { "name": "Corporate", "value": 2.60, "color": "#DB2777" },
+        { "name": "Government", "value": 0.80, "color": "#9D174D" }
+      ]
+    },
+    "Cash Credit Cr Balance": {
+      "title": "Cash Credit Cr Balance — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "MSME", "value": 1.50, "color": "#60A5FA" },
+        { "name": "Corporate", "value": 1.10, "color": "#3B82F6" },
+        { "name": "Retail", "value": 0.50, "color": "#2563EB" }
+      ]
+    },
+    "Special Term Deposit": {
+      "title": "Special Term Deposit — By Scheme",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Senior Citizen", "value": 1.20, "color": "#166534" },
+        { "name": "Tax Saver", "value": 0.94, "color": "#15803D" },
+        { "name": "Others", "value": 0.4034, "color": "#065F46" }
+      ]
+    },
+    "Other Demand Deposit": {
+      "title": "Other Demand Deposit — By Type",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Escrow", "value": 0.90, "color": "#FACC15" },
+        { "name": "EEFC", "value": 0.70, "color": "#EAB308" },
+        { "name": "Others", "value": 0.50, "color": "#CA8A04" }
+      ]
+    },
+    "Other Term Deposit": {
+      "title": "Other Term Deposit — By Type",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Flexi Deposit", "value": 0.09, "color": "#4338CA" },
+        { "name": "Recurring Deposit", "value": 0.0593, "color": "#3730A3" }
+      ]
+    },
+    "Certificate of Deposit": {
+      "title": "Certificate of Deposit — By Holder",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Bank CDs", "value": 0.0300, "color": "#FB923C" },
+        { "name": "Corporate CDs", "value": 0.0160, "color": "#F97316" }
+      ]
+    },
+    "Term Loan": {
+      "title": "Term Loan — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Public Sector", "value": 5.50, "color": "#6C5CE0" },
+        { "name": "Private Sector", "value": 4.50, "color": "#8B7CF6" },
+        { "name": "MSME", "value": 2.50, "color": "#5847C9" },
+        { "name": "Retail", "value": 1.50, "color": "#4338CA" }
+      ]
+    },
+    "Cash Credit": {
+      "title": "Cash Credit — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Public Sector", "value": 3.00, "color": "#EC4899" },
+        { "name": "Private Sector", "value": 3.50, "color": "#DB2777" },
+        { "name": "MSME", "value": 2.50, "color": "#9D174D" }
+      ]
+    },
+    "Demand Loan": {
+      "title": "Demand Loan — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Corporate", "value": 3.20, "color": "#60A5FA" },
+        { "name": "Retail", "value": 2.00, "color": "#3B82F6" },
+        { "name": "MSME", "value": 1.30, "color": "#2563EB" }
+      ]
+    },
+    "Overdraft": {
+      "title": "Overdraft — By Segment",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Retail", "value": 2.20, "color": "#FACC15" },
+        { "name": "Corporate", "value": 1.80, "color": "#EAB308" },
+        { "name": "MSME", "value": 1.00, "color": "#CA8A04" }
+      ]
+    },
+    "Agri Term Loan": {
+      "title": "Agri Term Loan — By Purpose",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Crop Loan", "value": 1.80, "color": "#22C55E" },
+        { "name": "Farm Mechanization", "value": 0.70, "color": "#16A34A" },
+        { "name": "Irrigation", "value": 0.50, "color": "#166534" }
+      ]
+    },
+    "Agri Cash Credit": {
+      "title": "Agri Cash Credit — By Purpose",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "KCC", "value": 1.30, "color": "#4338CA" },
+        { "name": "Allied Activities", "value": 0.70, "color": "#3730A3" }
+      ]
+    },
+    "Bills Payable": {
+      "title": "Bills Payable — By Type",
+      "subtitle": "Detailed breakdown (₹ T)",
+      "data": [
+        { "name": "Inland Bills", "value": 0.30, "color": "#FB923C" },
+        { "name": "Foreign Bills", "value": 0.20, "color": "#F97316" }
+      ]
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * theme.js — plain design-token primitives.
+ *
+ * This replaces the old MUI `createTheme()` + `<ThemeProvider>` pair.
+ * There is no theme *context* anymore: components import `theme` directly
+ * and read the values they need out of it. This is the "existing theme
+ * primitive file" the dashboard now pulls from — if your project already
+ * has one, point the imports in Dashboard.jsx at it instead, as long as it
+ * exposes the same shape (colors / radius / glass / typography).
+ */
+
+export const theme = {
+  colors: {
+    primary: "#6C5CE0",
+    primaryDark: "#5847C9",
+    primaryLight: "#8B7CF6",
+    textPrimary: "#1E1B3A",
+    textSecondary: "#6B6584",
+    onPrimary: "#FFFFFF",
+  },
+
+  radius: {
+    card: "20px",
+    tile: "14px",
+    control: "10px",
+    pill: "999px",
+  },
+
+  // Glassmorphism tokens — every card/panel/control pulls from here so the
+  // whole UI can be re-skinned by editing this one block.
+  glass: {
+    background: "rgba(255, 255, 255, 0.55)",
+    backgroundStrong: "rgba(255, 255, 255, 0.72)",
+    backgroundSubtle: "rgba(255, 255, 255, 0.4)",
+    border: "1px solid rgba(255, 255, 255, 0.6)",
+    borderSubtle: "1px solid rgba(255, 255, 255, 0.35)",
+    blur: "blur(20px) saturate(180%)",
+    blurSoft: "blur(12px) saturate(160%)",
+    shadow: "0 8px 32px rgba(31, 38, 135, 0.12)",
+    shadowHover: "0 12px 40px rgba(31, 38, 135, 0.18)",
+    innerHairline: "inset 0 1px 0 rgba(255, 255, 255, 0.5)",
+  },
+
+  typography: {
+    fontFamily: [
+      "Inter",
+      "-apple-system",
+      "BlinkMacSystemFont",
+      "Segoe UI",
+      "Roboto",
+      "Helvetica",
+      "Arial",
+      "sans-serif",
+    ].join(","),
+  },
+};
+
+export default theme;
 
