@@ -1,1 +1,1047 @@
 # DashBoard
+import React, { useMemo, useState } from "react";
+import {
+  Box,
+  Paper,
+  Stack,
+  Typography,
+  Select,
+  MenuItem,
+  Button,
+  Chip,
+} from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import CalendarTodayRoundedIcon from "@mui/icons-material/CalendarTodayRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
+
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+  LabelList,
+  Tooltip,
+} from "recharts";
+
+import { glass } from "../../theme/themePrimitives";
+import { fetchDrilldown } from "./dataProvider";
+import defaultDashboardData from "./bankingData.json";
+import useApi from "../../hooks/useApi";
+/* ---------------------------------------------------------------------- */
+/*  Color helpers                                                          */
+/*  Deposit categories use the exact hex palette requested (a deliberate,  */
+/*  fixed brand palette — not theme-derived), ordered dark → light to      */
+/*  read as a heatmap by value (the data is already sorted largest to      */
+/*  smallest). Loan categories get an equivalent dark → light purple       */
+/*  gradient, assigned by position for the same heatmap read.              */
+/*  Everything else (bar panels, drill-down subcategories) falls back to   */
+/*  a theme-derived palette, assigned BY POSITION so every bar/tile in a   */
+/*  given chart is guaranteed a distinct color (a name-hash fallback was   */
+/*  tried first but collides for some loan category names).                */
+/* ---------------------------------------------------------------------- */
+
+/** Continuous dark→light interpolation for the heatmap treemap below — a
+ * genuine gradient tied to each item's actual value (not a handful of
+ * discrete hex stops), so two tiles with close values get visibly close
+ * colors instead of jumping between unrelated hues. */
+function hexToRgb(hex) {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgbToHex([r, g, b]) {
+  return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
+}
+function mixHex(hexA, hexB, t) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  return rgbToHex(a.map((v, i) => v + (b[i] - v) * t));
+}
+/** Maps a value into a continuous color between `lightHex` (lowest value
+ * in the set) and `darkHex` (highest value) — the actual heatmap gradient
+ * used by the treemap tiles. */
+function heatColor(value, min, max, darkHex, lightHex) {
+  const t = max === min ? 1 : (value - min) / (max - min);
+  return mixHex(lightHex, darkHex, t);
+}
+
+const FIXED_DEPOSIT_COLORS = {
+  "Term Deposit": "#0c2340",
+  "Saving Bank A/c": "#1e3a5f",
+  "Current A/c": "#3b82f6",
+  "Cash Credit Cr Balance": "#2d8a9e",
+  "Special Term Deposit": "#0ea5e9",
+  "Other Demand Deposit": "#06b6d4",
+  "Other Term Deposit": "#5cbdb9",
+  "Certificate of Deposit": "#7dd3fc",
+};
+
+function fallbackPalette(theme) {
+  const p = theme.palette;
+  return [
+    p.primary.dark,
+    p.info.dark,
+    p.secondary.dark,
+    p.success.dark,
+    p.primary.main,
+    p.info.main,
+    p.secondary.main,
+    p.success.main,
+    p.primary.light,
+    p.info.light,
+  ].filter(Boolean);
+}
+
+/** Resolves a category's color: the fixed deposit hex if it's a known
+ * deposit category, otherwise a theme color chosen by its position in the
+ * current list (guarantees every item in one chart gets a different
+ * color, which a pure name-hash can't promise — see note above). */
+function getColor(name, index, theme) {
+  if (FIXED_DEPOSIT_COLORS[name]) return FIXED_DEPOSIT_COLORS[name];
+  const palette = fallbackPalette(theme);
+  return palette[index % palette.length];
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Shared style helpers                                                   */
+/* ---------------------------------------------------------------------- */
+
+const textPrimarySx = { color: "text.primary" };
+const textSecondarySx = { color: "text.secondary" };
+const RADIUS = { lg: "20px", md: "16px", sm: "12px" };
+
+/* ---------------------------------------------------------------------- */
+/*  Glass primitives                                                       */
+/*  Cards are noticeably more opaque than a typical glass effect so text   */
+/*  and chart data stay crisp against whatever sits behind the page.       */
+/*                                                                          */
+/*  `selected` / `onClick` add the click-to-highlight interaction used     */
+/*  across every panel: clicking a card selects it (solid black border);   */
+/*  selecting a different card clears the previous one automatically,      */
+/*  since selection is a single value lifted up to the dashboard root.     */
+/* ---------------------------------------------------------------------- */
+
+function GlassPanel({ children, sx, selected, onClick, ...props }) {
+  const theme = useTheme();
+
+  return (
+    <Paper
+      elevation={0}
+      onClick={onClick}
+      sx={{
+        p: 2.5,
+        borderRadius: RADIUS.lg,
+        height: "100%",
+        background: `linear-gradient(160deg, ${glass.panel(0.6)} 0%, ${glass.panel(0.38)} 100%)`,
+        backdropFilter: "blur(24px) saturate(160%)",
+        WebkitBackdropFilter: "blur(24px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        boxShadow: theme.shadows[6],
+        cursor: onClick ? "pointer" : "default",
+        transition: "box-shadow 0.25s ease, transform 0.25s ease, border-color 0.2s ease",
+        ...sx,
+      }}
+      {...props}
+    >
+      {children}
+    </Paper>
+  );
+}
+
+function PanelHeader({ icon: Icon, title, action, iconColor }) {
+  const theme = useTheme();
+  const color = iconColor || theme.palette.primary.main;
+
+  return (
+    <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" rowGap={1} sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        {Icon && (
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: RADIUS.sm,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: alpha(color, 0.14),
+              color,
+              flexShrink: 0,
+            }}
+          >
+            <Icon sx={{ fontSize: 19 }} />
+          </Box>
+        )}
+        <Typography sx={{ ...textPrimarySx, fontWeight: 700, fontSize: 15, letterSpacing: 0.1 }}>
+          {title}
+        </Typography>
+      </Stack>
+      {action}
+    </Stack>
+  );
+}
+
+function MiniSelect({ options, value, onChange }) {
+  const theme = useTheme();
+
+  return (
+    <Select
+      size="small"
+      value={value}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange(e.target.value)}
+      sx={{
+        ...textPrimarySx,
+        fontSize: 13,
+        fontWeight: 600,
+        borderRadius: RADIUS.sm,
+        background: glass.panel(0.5),
+        backdropFilter: "blur(12px) saturate(160%)",
+        "& .MuiOutlinedInput-notchedOutline": { border: `1px solid ${glass.border}` },
+        "& .MuiSelect-select": { py: 0.75, pr: 4 },
+      }}
+    >
+      {options.map((opt) => (
+        <MenuItem key={opt} value={opt} sx={{ fontSize: 13, fontFamily: theme.typography.fontFamily }}>
+          {opt}
+        </MenuItem>
+      ))}
+    </Select>
+  );
+}
+
+/** A light section header: a slim colored accent, title + caption, and a
+ * fading rule trailing to the right. No boxed icon chip — kept quiet on
+ * purpose so it doesn't compete with the panels underneath it.
+ * `icon` is accepted for API compatibility with callers but intentionally
+ * unused here. */
+function SectionHeader({ title, caption }) {
+  const theme = useTheme();
+
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mt: 1.5, pl: 0.25 }}>
+      <Box
+        sx={{
+          width: 4,
+          height: 22,
+          borderRadius: "999px",
+          bgcolor: theme.palette.primary.main,
+          flexShrink: 0,
+        }}
+      />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ ...textPrimarySx, fontSize: { xs: 15, md: 16.5 }, fontWeight: 600, lineHeight: 1.3 }}>
+          {title}
+        </Typography>
+        {caption && (
+          <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }}>{caption}</Typography>
+        )}
+      </Box>
+      <Box
+        sx={{
+          flex: 1,
+          height: "1px",
+          ml: 1,
+          background: `linear-gradient(90deg, ${alpha(theme.palette.text.primary, 0.12)}, transparent)`,
+          display: { xs: "none", sm: "block" },
+        }}
+      />
+    </Stack>
+  );
+}
+
+/** Small pill button used to leave a drill-down and return to the parent
+ * chart. Purely presentational — callers pass the `onBack` handler. */
+function BackButton({ onBack }) {
+  const theme = useTheme();
+
+  return (
+    <Button
+      size="small"
+      onClick={(e) => {
+        e.stopPropagation();
+        onBack();
+      }}
+      startIcon={<ArrowBackRoundedIcon sx={{ fontSize: 16 }} />}
+      sx={{
+        textTransform: "none",
+        fontWeight: 700,
+        fontSize: 12.5,
+        borderRadius: RADIUS.sm,
+        color: theme.palette.primary.main,
+        bgcolor: alpha(theme.palette.primary.main, 0.1),
+        "&:hover": { bgcolor: alpha(theme.palette.primary.main, 0.18) },
+      }}
+    >
+      Back
+    </Button>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Custom chart tooltip — a small frosted card matching the rest of the   */
+/*  UI, in place of Recharts' unstyled default. Reads the color straight   */
+/*  off the data point (attached as __color when the chart data is built) */
+/*  so the tooltip swatch always matches the bar/dot exactly.              */
+/* ---------------------------------------------------------------------- */
+
+function ChartTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const value = payload[0].value;
+  const color = payload[0].payload?.__color || getColor(label, 0, theme);
+
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>{label}</Typography>
+      <Typography sx={{ fontSize: 14, fontWeight: 800, color }}>
+        ₹ {value < 1 ? value.toFixed(4) : value} T
+      </Typography>
+    </Box>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Reusable drill-down bar chart — knows nothing about deposits/loans,    */
+/*  just renders whatever { title, subtitle, data } it's handed.          */
+/* ---------------------------------------------------------------------- */
+
+function DrilldownBarChart({ icon, config, onBack }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+  const longLabels = config.data.length > 5;
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  return (
+    <>
+      <PanelHeader icon={icon} title={config.title} action={<BackButton onBack={onBack} />} />
+      {config.subtitle && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>
+          {config.subtitle}
+        </Typography>
+      )}
+      <Box
+        sx={{
+          width: "100%",
+          height: longLabels ? 320 : 270,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          <BarChart
+            data={chartData}
+            margin={{ top: 28, right: 16, left: -4, bottom: longLabels ? 70 : 6 }}
+            barCategoryGap="32%"
+          >
+            <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: longLabels ? 9.5 : 10.5, fill: theme.palette.text.secondary }}
+              axisLine={{ stroke: gridStrokeColor }}
+              tickLine={false}
+              interval={0}
+              angle={longLabels ? -35 : 0}
+              textAnchor={longLabels ? "end" : "middle"}
+              height={longLabels ? 70 : 30}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+              axisLine={false}
+              tickLine={false}
+              width={32}
+            />
+            <Tooltip
+              cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+              content={(props) => <ChartTooltip {...props} theme={theme} />}
+            />
+            <Bar dataKey="value" radius={[7, 7, 0, 0]} maxBarSize={48}>
+              {chartData.map((d) => (
+                <Cell key={d.name} fill={d.__color} />
+              ))}
+              <LabelList
+                dataKey="value"
+                position="top"
+                formatter={(v) => `₹${v < 1 ? v.toFixed(4) : v}T`}
+                style={{ fontSize: 11, fontWeight: 700, fill: theme.palette.text.primary }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  CASA Gauge (semi-donut + needle) built with Recharts Pie               */
+/*  Status bands are fixed red / amber / green. The needle angle is        */
+/*  driven directly by config.value, and the needle + reading are tinted   */
+/*  to match whichever band the current ratio falls into.                  */
+/* ---------------------------------------------------------------------- */
+
+const CASA_BANDS = [
+  { name: "Below 35%", width: 33.3, key: "low" },
+  { name: "35% – 65%", width: 33.3, key: "mid" },
+  { name: "Above 65%", width: 33.3, key: "high" },
+];
+
+function casaStatus(value) {
+  if (value < 35) return "low";
+  if (value <= 65 && value >= 35) return "mid";
+  return "high";
+}
+
+function Gauge({ config, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const RADIAN = Math.PI / 180;
+  const VIEWBOX = 300;
+  const cx = VIEWBOX * 0.5; // matches the Pie's cx="50%"
+  const cy = VIEWBOX * 0.85; // matches the Pie's cy="85%" — NOT cx/cy * 0.85
+  const innerR = 95;
+  const GAUGE_SIZE = 280; // fixed + square — see note above
+
+  const statusColor = {
+    low: theme.palette.error.main,
+    mid: theme.palette.warning.main,
+    high: theme.palette.success.main,
+  };
+  const bandData = CASA_BANDS.map((b) => ({ name: b.name, value: b.width }));
+  const currentStatus = casaStatus(config.value);
+  const needleColor = statusColor[currentStatus];
+
+  const clampedValue = Math.min(Math.max(config.value, 0), 100);
+  const needleAngle = 180 - (clampedValue / 100) * 180; // 0..180 -> deg, driven by the actual value
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel(panelId)}>
+      <PanelHeader icon={PieChartRoundedIcon} title={config.title} />
+
+      <Box
+        sx={{
+          position: "relative",
+          width: GAUGE_SIZE,
+          height: GAUGE_SIZE,
+          mx: "auto",
+          mb: 1,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={bandData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="85%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={92}
+              outerRadius={130}
+              cornerRadius={4}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              <Cell fill={statusColor.low} />
+              <Cell fill={statusColor.mid} />
+              <Cell fill={statusColor.high} />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* needle + center readout, overlaid absolutely — cx/cy now match
+            the Pie's actual cx="50%" cy="85%" exactly, so the needle's
+            base sits right at the pie center instead of drifting above it */}
+        <Box sx={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+          <svg viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`} width="100%" height="100%">
+            <circle cx={cx} cy={cy} r="7" fill={needleColor} />
+            <line
+              x1={cx}
+              y1={cy}
+              x2={cx + (innerR - 6) * Math.cos(needleAngle * RADIAN)}
+              y2={cy - (innerR - 6) * Math.sin(needleAngle * RADIAN)}
+              stroke={needleColor}
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </Box>
+
+        <Box sx={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center" }}>
+          <Typography sx={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: needleColor }}>
+            {config.value.toFixed(1)}%
+          </Typography>
+        </Box>
+      </Box>
+
+      <Stack direction="row" spacing={2.5} justifyContent="center" flexWrap="wrap" sx={{ mt: 1.5 }}>
+        {CASA_BANDS.map((b) => (
+          <Stack key={b.key} direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: statusColor[b.key] }} />
+            <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }}>{b.name}</Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </GlassPanel>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Treemap layout                                                         */
+/*  A simple recursive "slice and dice" treemap: split the (already        */
+/*  value-sorted) list roughly in half by cumulative value, lay that out   */
+/*  as two rectangles side by side (or stacked), and recurse into each     */
+/*  half alternating direction. This is what actually makes tile SIZE      */
+/*  reflect value — the uniform grid before this didn't.                  */
+/* ---------------------------------------------------------------------- */
+
+function buildTreemap(items, x, y, w, h, horizontal) {
+  if (items.length === 0) return [];
+  if (items.length === 1) return [{ item: items[0], x, y, w, h }];
+
+  const total = items.reduce((sum, it) => sum + it.value, 0);
+  let splitIndex = 1;
+  let bestDiff = Infinity;
+  let runningSum = 0;
+  for (let k = 0; k < items.length - 1; k += 1) {
+    runningSum += items[k].value;
+    const diff = Math.abs(runningSum - total / 2);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      splitIndex = k + 1;
+    }
+  }
+
+  const firstGroup = items.slice(0, splitIndex);
+  const secondGroup = items.slice(splitIndex);
+  const firstSum = firstGroup.reduce((sum, it) => sum + it.value, 0);
+  const ratio = total === 0 ? 0.5 : firstSum / total;
+
+  if (horizontal) {
+    const w1 = w * ratio;
+    return [
+      ...buildTreemap(firstGroup, x, y, w1, h, false),
+      ...buildTreemap(secondGroup, x + w1, y, w - w1, h, false),
+    ];
+  }
+  const h1 = h * ratio;
+  return [
+    ...buildTreemap(firstGroup, x, y, w, h1, true),
+    ...buildTreemap(secondGroup, x, y + h1, w, h - h1, true),
+  ];
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Composition treemap (used for both Deposits and Loans)                 */
+/*  Tile SIZE is proportional to value (a real treemap, not a uniform      */
+/*  grid) and tile COLOR is a continuous dark→light gradient tied to the   */
+/*  value itself — the two things that make it read as an actual heatmap  */
+/*  rather than a row of arbitrarily-colored boxes. Full width, one        */
+/*  section per row.                                                      */
+/*                                                                          */
+/*  NOT CLICKABLE: tiles no longer drill down — only a subtle hover lift   */
+/*  remains. Clicking anywhere on the panel (the treemap "card" itself)    */
+/*  still selects it via the same click-to-highlight interaction as every  */
+/*  other panel. The old click-to-drill-down code is commented out below,  */
+/*  not deleted, in case it's wanted again later.                         */
+/*                                                                          */
+/*  `gradientDark` / `gradientLight` set the two gradient endpoints for    */
+/*  this section (deposits = navy→sky, loans = deep purple→lavender).      */
+/*                                                                          */
+/*  `filterGroups`, when provided (used for Deposits), wires the existing  */
+/*  "All / Demand / Term" dropdown up to actually filter which categories  */
+/*  are shown, instead of being purely cosmetic.                          */
+/* ---------------------------------------------------------------------- */
+
+function CompositionMosaic({
+  config,
+  icon = Inventory2RoundedIcon,
+  filterGroups,
+  gradientDark,
+  gradientLight,
+  shareLabel = "of total",
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const theme = useTheme();
+  const hasFilter = Array.isArray(config.filterOptions) && config.filterOptions.length > 0;
+  const [filter, setFilter] = useState(config.activeFilter || (hasFilter ? config.filterOptions[0] : undefined));
+  // const [drilldown, setDrilldown] = useState(null); // DRILL-DOWN DISABLED — see note below
+
+  const items = useMemo(() => {
+    const group = filterGroups && filterGroups[filter];
+    if (!group) return config.items; // "All Deposits" (or no filter wired) — show everything
+    return config.items.filter((it) => group.includes(it.name));
+  }, [config.items, filter, filterGroups]);
+
+  const legend = useMemo(() => {
+    if (!filterGroups || !filterGroups[filter]) return config.legend;
+    const names = new Set(items.map((it) => it.name));
+    return config.legend.filter((l) => names.has(l.name));
+  }, [config.legend, filterGroups, filter, items]);
+
+  const values = items.map((it) => it.value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const colorFor = (value) => heatColor(value, minValue, maxValue, gradientDark, gradientLight);
+
+  const layout = useMemo(
+    () => buildTreemap(items, 0, 0, 100, 85, true),
+    [items]
+  );
+
+  // DRILL-DOWN DISABLED (heatmaps are display-only per request) — kept
+  // ready rather than deleted; wire `onClick={() => handleTileClick(item)}`
+  // back onto the Tile below to re-enable.
+  // const handleTileClick = (item) => {
+  //   fetchDrilldown(item.name).then((result) => {
+  //     if (result) setDrilldown(result);
+  //   });
+  // };
+
+  const Tile = ({ item, x, y, w, h }) => {
+    const color = colorFor(item.value);
+    const fg = theme.palette.getContrastText(color);
+    const small = w < 16 || h < 20;
+    const sheen = mixHex(color, "#ffffff", 0.16);
+    return (
+      <Box
+        sx={{
+          position: "absolute",
+          left: `${x}%`,
+          top: `${y}%`,
+          width: `${w}%`,
+          height: `${h}%`,
+          // p: 0,        // ← was probably p: 1 or p: 2
+          // m: 0,        // ← r/emove any margin
+          // borderRadius: 5,
+          boxSizing: "border-box",
+        }}
+      >
+        <Box
+          sx={{
+            width: "100%",
+            height: "100%",
+            // borderRadius: RADIUS.sm,
+            p: 1,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            overflow: "hidden",
+            background: `linear-gradient(135deg, ${sheen} 0%, ${color} 55%)`,
+            color: fg,
+            transition: "transform 0.18s ease, box-shadow 0.18s ease",
+            "&:hover": { transform: "scale(1.015)", boxShadow: theme.shadows[6], zIndex: 1 },
+          }}
+        >
+          <Typography
+            sx={{
+              fontFamily: theme.typography.fontFamily,
+              fontSize: small ? 11 : 13,
+              fontWeight: 600,
+              opacity: 0.92,
+              lineHeight: 1.25,
+            }}
+            noWrap
+          >
+            {item.name}
+          </Typography>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontFamily: theme.typography.fontFamily,
+                fontSize: small ? 13 : 20,
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+              noWrap
+            >
+              ₹ {item.value.toFixed(2)} T
+            </Typography>
+            {!small && (
+              <Typography
+                sx={{
+                  fontFamily: theme.typography.fontFamily,
+                  fontSize: 11.5,
+                  opacity: 0.82,
+                  mt: 0.25,
+                }}
+              >
+                {item.share}% {shareLabel}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
+  /* DRILL-DOWN DISABLED — kept ready, not deleted (see handleTileClick note above).
+  if (drilldown) {
+    return (
+      <GlassPanel sx={{ p: 3 }}>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+  */
+
+  return (
+    // <GlassPanel selected={selectedPanel === panelId} onClick={() => onSelectPanel(panelId)}>
+    <Box 
+      component={Paper} 
+      elevation={6} 
+      sx={{
+        height: { xs: 300, sm: 340, md: 380 },
+        p:2
+      }}
+
+    >
+      <PanelHeader
+        icon={icon}
+        title={config.title}
+        action={
+          hasFilter ? (
+            <MiniSelect options={config.filterOptions} value={filter} onChange={setFilter} />
+          ) : undefined
+        }
+      />
+      {/* <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography> */}
+
+      <Box
+        sx={{
+          // m: 4,
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          alignContent: 'center',
+          justifyContent: 'center',
+          alignItems: 'center'
+
+        }}
+      >
+        {layout.map(({ item, x, y, w, h }) => (
+          <Tile key={item.name} item={item} x={x} y={y} w={w} h={h} />
+        ))}
+      </Box>
+
+      {/* <LegendGrid items={legend} valueItems={items} colorFor={colorFor} /> */}
+
+    </Box>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Legend — a single reusable row of color-dot + label, wraps cleanly     */
+/*  regardless of how many categories are passed in.                      */
+/* ---------------------------------------------------------------------- */
+
+function LegendGrid({ items, valueItems, colorFor }) {
+  const theme = useTheme();
+
+  return (
+    <Box
+      sx={{
+        mt: 2,
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(136px, 1fr))",
+        rowGap: 0.85,
+        columnGap: 1.5,
+      }}
+    >
+      {items.map((l, i) => {
+        const matched = valueItems && valueItems.find((it) => it.name === l.name);
+        const dotColor = colorFor && matched ? colorFor(matched.value) : getColor(l.name, i, theme);
+        return (
+          <Stack key={l.name} direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "2px",
+                bgcolor: dotColor,
+                flexShrink: 0,
+              }}
+            />
+            <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }} noWrap>
+              {l.name}
+            </Typography>
+          </Stack>
+        );
+      })}
+    </Box>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Bar chart panels (Demand / Term deposits, Loans breakdown)             */
+/*  Clicking a bar drills into that item; clicking the panel anywhere      */
+/*  ELSE selects it (black border) via the same interaction every panel    */
+/*  shares. `e.stopPropagation()` on the bar's own click keeps those two   */
+/*  interactions from triggering on the same click ("outside the bars").  */
+/*  `titleOverride` lets a panel show a more specific label than the       */
+/*  source config's title (the composition and breakdown views for loans  */
+/*  share the same underlying "Loans" title in the data, which reads as   */
+/*  ambiguous once both are on screen together).                          */
+/* ---------------------------------------------------------------------- */
+
+function BarPanel({ icon, config, titleOverride, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+  const hasDropdown = Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
+  const [option, setOption] = useState(config.activeOption || (hasDropdown ? config.dropdownOptions[0] : undefined));
+  const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
+  const longLabels = config.data.length > 5;
+
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  const handleBarClick = (item) => {
+    fetchDrilldown(item.name).then((result) => {
+      if (result) setDrilldown(result);
+    });
+  };
+
+  if (drilldown) {
+    return (
+      <GlassPanel sx={{ p: 3 }}>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel(panelId)}>
+      <PanelHeader
+        icon={icon}
+        title={titleOverride || config.title}
+        action={hasDropdown ? <MiniSelect options={config.dropdownOptions} value={option} onChange={setOption} /> : undefined}
+      />
+      {config.topValue && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 2 }}>
+          Largest category: <b>{config.topValue}</b>
+        </Typography>
+      )}
+      <Box
+        sx={{
+          width: "100%",
+          height: longLabels ? 320 : 270,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          <BarChart
+            data={chartData}
+            margin={{ top: 28, right: 16, left: -4, bottom: longLabels ? 70 : 6 }}
+            barCategoryGap="32%"
+          >
+            <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+            <XAxis
+              dataKey="name"
+              tick={{ fontSize: longLabels ? 9.5 : 10.5, fill: theme.palette.text.secondary }}
+              axisLine={{ stroke: gridStrokeColor }}
+              tickLine={false}
+              interval={0}
+              angle={longLabels ? -35 : 0}
+              textAnchor={longLabels ? "end" : "middle"}
+              height={longLabels ? 70 : 30}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+              axisLine={false}
+              tickLine={false}
+              width={32}
+            />
+            <Tooltip
+              cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+              content={(props) => <ChartTooltip {...props} theme={theme} />}
+            />
+            <Bar dataKey="value" radius={[7, 7, 0, 0]} maxBarSize={48}>
+              {chartData.map((d) => (
+                <Cell
+                  key={d.name}
+                  fill={d.__color}
+                  cursor="pointer"
+                  onClick={(e) => {
+                    e.stopPropagation(); // keeps bar-click drill-down separate from panel selection
+                    handleBarClick(d);
+                  }}
+                />
+              ))}
+              <LabelList
+                dataKey="value"
+                position="top"
+                formatter={(v) => `₹${v < 1 ? v.toFixed(4) : v}T`}
+                style={{ fontSize: 11, fontWeight: 700, fill: theme.palette.text.primary }}
+              />
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Box>
+    </GlassPanel>
+  );
+}
+
+function DashboardHeader({ config }) {
+  const theme = useTheme();
+  const [fy, setFy] = useState(config.financialYear);
+
+  return (
+    <Stack
+      direction={{ xs: "column", lg: "row" }}
+      alignItems={{ xs: "flex-start", lg: "center" }}
+      justifyContent="space-between"
+      spacing={2}
+      sx={{ px: 0.5 }}
+    >
+      <Box>
+        <Typography sx={{ ...textPrimarySx, fontSize: { xs: 20, md: 24 }, fontWeight: 700 }}>
+          {config.title}
+        </Typography>
+        <Typography sx={{ ...textSecondarySx, fontSize: 13, mt: 0.25 }}>{config.subtitle}</Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Root Dashboard                                                         */
+/*  Layout: header → Deposits heatmap (full width) → CASA / Demand / Term  */
+/*  in one row → Loans heatmap (full width) → Loan Distribution (full      */
+/*  width). Every column collapses to a single stack on small screens.    */
+/*                                                                          */
+/*  `selectedPanel` is a single value lifted up here and passed to every   */
+/*  panel — clicking one panel both highlights it and clears whichever     */
+/*  panel was previously selected, since only one id can match at a time. */
+/* ---------------------------------------------------------------------- */
+
+export default function DepositsLoansDashboard({ data }) {
+  const theme = useTheme();
+  const dashboardData = data || defaultDashboardData;
+  const [selectedPanel, setSelectedPanel] = useState(null);
+
+  const depositFilterGroups = useMemo(
+    () => ({
+      "Demand Deposits": dashboardData.demandDeposits.data.map((d) => d.name),
+      "Term Deposits": dashboardData.termDeposits.data.map((d) => d.name),
+    }),
+    [dashboardData]
+  );
+
+  const ambientBackground =
+    theme.palette.mode === "dark"
+      ? `radial-gradient(1100px 550px at 8% -8%, ${alpha(theme.palette.primary.main, 0.22)}, transparent 60%),` +
+        `radial-gradient(900px 500px at 100% 0%, ${alpha(theme.palette.info.main, 0.14)}, transparent 55%),` +
+        `${theme.palette.background.default}`
+      : `radial-gradient(1100px 550px at 8% -8%, ${alpha(theme.palette.primary.light, 0.16)}, transparent 60%),` +
+        `radial-gradient(900px 500px at 100% 0%, ${alpha(theme.palette.info.light, 0.12)}, transparent 55%),` +
+        `${theme.palette.background.default}`;
+
+  return (
+    <Box
+      sx={{
+        // p: { xs: 1.5, md: 3 },
+        display: "flex",
+        flexDirection: "column",
+        gap: 2.5,
+        minHeight: "100vh",
+        // background: ambientBackground,
+      }}
+    >
+      {/* <DashboardHeader config={dashboardData.header} /> */}
+
+      {/* Deposits heatmap — full width, its own row */}
+      <CompositionMosaic
+        config={dashboardData.depositsComposition}
+        icon={AccountBalanceRoundedIcon}
+        filterGroups={depositFilterGroups}
+        gradientDark="#123a63"
+        gradientLight="#7dd3fc"
+        shareLabel="of deposits"
+        panelId="deposits-heatmap"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+
+      {/* CASA Ratio + Demand Deposits + Term Deposits — one row */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr", lg: "1fr 1fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <Gauge
+          config={dashboardData.casaGauge}
+          panelId="casa-gauge"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <BarPanel
+          icon={DescriptionRoundedIcon}
+          config={dashboardData.demandDeposits}
+          panelId="demand-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <BarPanel
+          icon={DescriptionRoundedIcon}
+          config={dashboardData.termDeposits}
+          panelId="term-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      {/* Loans heatmap — full width, its own row */}
+      <CompositionMosaic
+        config={dashboardData.loansComposition}
+        icon={AccountBalanceWalletRoundedIcon}
+        gradientDark="#2e2258"
+        gradientLight="#efe6fd"
+        shareLabel="of loans"
+        panelId="loans-heatmap"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+
+      {/* Loan Distribution — full width, its own row (no equivalent gauge to pair it with) */}
+      <BarPanel
+        icon={TrendingUpRoundedIcon}
+        config={dashboardData.loansBreakdown}
+        titleOverride="Loan Distribution"
+        panelId="loan-distribution-bar"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+    </Box>
+  );
+}
