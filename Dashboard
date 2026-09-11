@@ -1,1 +1,754 @@
+/* ---------------------------------------------------------------------- */
+/*  mapApiToDashboardData.js                                               */
+/*  Translates ONE `staticDashboardData[i]` section from the real API      */
+/*  response into the exact shape <DepositsLoansDashboard data={...} />    */
+/*  expects. This is the ONLY place that needs to change if the API        */
+/*  response shape changes — no component touches the raw API shape.       */
+/*                                                                          */
+/*  Values NOT present in the API are calculated here, never hardcoded:    */
+/*   - `share` (% of total) per deposit/loan item                         */
+/*   - `topValue` (largest category, formatted) per bar panel             */
+/*                                                                          */
+/*  SECURITY / ROBUSTNESS NOTE — this is the one file that touches raw,    */
+/*  untrusted network data before anything else sees it. Every field is    */
+/*  read defensively (type-checked, range-clamped, array-guarded) so a     */
+/*  malformed, partial, or unexpected API response can never throw and     */
+/*  crash the dashboard — worst case, a value falls back to a safe         */
+/*  default ("not available", 0, or an empty list) and the rest of the     */
+/*  page still renders. The whole export is wrapped in try/catch for the   */
+/*  same reason. All values are plain numbers/strings passed through       */
+/*  React's normal text rendering — nothing here is ever put into HTML     */
+/*  directly, so there's no injection surface from this data.             */
+/* ---------------------------------------------------------------------- */
+
+import { formatAmount, normalizeDepositName } from "./utils";
+
+/** Coerces `raw` into a finite, non-negative number, or `0` if it can't
+ * be trusted (missing, wrong type, NaN, negative). Deposit/loan amounts
+ * are never legitimately negative, and a stray negative or NaN value
+ * would otherwise corrupt every downstream calculation that depends on
+ * it (shares, totals, sqrt-based tile sizing in HeatTree). */
+function toSafeAmount(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function mapItems(rawItems) {
+  if (!Array.isArray(rawItems)) return [];
+  return rawItems
+    .filter((it) => it && typeof it === "object")
+    .map((it) => ({
+      name: normalizeDepositName(it.name),
+      type: String(it.type || "").trim(),
+      value: toSafeAmount(it.value),
+    }));
+}
+
+/** Adds a `share` (% of the group's total, one decimal place) to each item —
+ * not provided by the API, calculated here. */
+function withShare(items) {
+  const total = items.reduce((sum, it) => sum + it.value, 0);
+  return items.map((it) => ({
+    ...it,
+    share: total > 0 ? Number(((it.value / total) * 100).toFixed(1)) : 0,
+  }));
+}
+
+/** "Largest category" summary line shown on the bar panels — not provided
+ * by the API, calculated here from whatever data came back. */
+function topValueOf(items) {
+  if (!items.length) return undefined;
+  return formatAmount(Math.max(...items.map((it) => it.value)));
+}
+
+/** Builds the { title, topValue, items/data } shape shared by every
+ * composition (treemap) + breakdown (bar) section, so deposits/loans
+ * don't each repeat the same handful of lines. */
+function buildSection(raw) {
+  const items = withShare(mapItems(raw?.data));
+  return {
+    title: typeof raw?.title === "string" ? raw.title : "",
+    subtitle: typeof raw?.subtitle === "string" ? raw.subtitle : undefined,
+    filterOptions: Array.isArray(raw?.filterOptions) ? raw.filterOptions.filter((o) => typeof o === "string") : undefined,
+    activeFilter: Array.isArray(raw?.filterOptions) ? raw.filterOptions[0] : undefined,
+    items,
+    legend: items.map((it) => ({ name: it.name })),
+    topValue: topValueOf(items),
+    data: items, // same list, shaped for a bar panel's `data` prop
+  };
+}
+
+/* ---- CASA ratio -----------------------------------------------------------
+ * The API sends casaratio.value as a plain fraction (e.g. 0.140 = 14.0%).
+ * Guarded rather than assumed: if a future response sends an already-
+ * converted percentage (e.g. 14.0) instead, that's still handled; anything
+ * outside a sane range is treated as "not available" rather than trusted
+ * and displayed wrong. */
+
+function normalizeCasaPercent(rawValue) {
+  if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) return null;
+  if (rawValue >= 0 && rawValue <= 1) return rawValue * 100; // fraction, e.g. 0.14 -> 14%
+  if (rawValue > 1 && rawValue <= 100) return rawValue; // already a percentage
+  return null; // out of any sane range — don't guess, show "not available"
+}
+
+/** The API also sends the gauge's band definitions as text
+ * (e.g. casaValue: "Below 30%", "30% – 50%", "Above 50%") instead of
+ * hardcoded thresholds. Pulls the numbers out of that text so Gauge.jsx's
+ * low/mid/high bands always match whatever the API actually says, instead
+ * of a fixed 35/65 split. Returns null (Gauge falls back to its own
+ * default) if the text can't be parsed — never throws on unexpected text. */
+function parseCasaBandThresholds(bands) {
+  if (!Array.isArray(bands) || bands.length === 0) return null;
+  const numbers = bands
+    .flatMap((b) => String(b?.casaValue || "").match(/\d+(\.\d+)?/g) || [])
+    .map(Number)
+    .filter((n) => Number.isFinite(n))
+    .sort((a, b) => a - b);
+  if (numbers.length < 2) return null;
+  return { low: numbers[0], high: numbers[numbers.length - 1] };
+}
+
+/**
+ * @param {object} section — one entry from `response.data.staticDashboardData`
+ * @returns the `data` prop shape DepositsLoansDashboard expects, or null if
+ *          `section` is missing/malformed beyond use.
+ */
+export default function mapApiToDashboardData(section) {
+  try {
+    if (!section || typeof section !== "object") return null;
+
+    const depositsRaw = section.deposits;
+    const demandRaw = section.demanddeposits;
+    const timeRaw = section.timedeposits;
+    const casaRaw = section.casaratio;
+    const loansRaw = section.loans;
+
+    const deposits = buildSection(depositsRaw);
+    const demand = buildSection(demandRaw);
+    const time = buildSection(timeRaw);
+    const loans = buildSection(loansRaw);
+
+    const casaPercent = normalizeCasaPercent(casaRaw?.value);
+    const casaBands = parseCasaBandThresholds(casaRaw?.data);
+
+    return {
+      // Not present in the API — static page copy, not a business figure,
+      // so this is the one place left as plain text rather than derived
+      // data.
+      header: {
+        title: "Deposits Dashboard",
+        subtitle: "Portfolio overview by category",
+      },
+
+      casaGauge: {
+        title: typeof casaRaw?.title === "string" ? casaRaw.title : "CASA Ratio",
+        subtitle: typeof casaRaw?.subtitle === "string" ? casaRaw.subtitle : undefined,
+        // null whenever the value is missing/unparseable — Gauge.jsx
+        // renders an explicit "not available yet" state for that case,
+        // it never guesses or shows a misleading 0%.
+        value: casaPercent,
+        centerLabel: typeof casaRaw?.title === "string" ? casaRaw.title : "CASA Ratio",
+        // Optional — Gauge.jsx falls back to its own default thresholds
+        // if this is null (couldn't be parsed from the API's band text).
+        bands: casaBands,
+      },
+
+      depositsComposition: {
+        title: deposits.title,
+        subtitle: deposits.subtitle,
+        filterOptions: deposits.filterOptions,
+        activeFilter: deposits.activeFilter,
+        items: deposits.items,
+        legend: deposits.legend,
+      },
+
+      demandDeposits: {
+        title: demand.title,
+        topValue: demand.topValue,
+        data: demand.data,
+      },
+
+      termDeposits: {
+        title: time.title,
+        topValue: time.topValue,
+        data: time.data,
+      },
+
+      loansComposition: {
+        title: loans.title,
+        subtitle: loans.subtitle,
+        filterOptions: loans.filterOptions,
+        activeFilter: loans.activeFilter,
+        items: loans.items,
+        legend: loans.legend,
+      },
+
+      loansBreakdown: {
+        title: loans.title,
+        topValue: loans.topValue,
+        data: loans.data,
+      },
+    };
+  } catch (err) {
+    // Never let a malformed API response crash the dashboard — log for
+    // observability and let the caller's existing "no data available"
+    // state handle it gracefully.
+    // eslint-disable-next-line no-console
+    console.error("mapApiToDashboardData: failed to parse API response", err);
+    return null;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  Gauge.jsx                                                              */
+/*  Semi-donut gauge with a value-driven needle, used for the CASA Ratio.  */
+/*  Status bands are a fixed red/amber/green — a "traffic light" read      */
+/*  rather than category colors — and the needle angle comes directly     */
+/*  from `config.value`, so it always points exactly where the number      */
+/*  says.                                                                  */
+/*                                                                          */
+/*  BAND THRESHOLDS — now driven by the API when available. The API sends  */
+/*  the band definitions as text (e.g. "Below 30%", "30% – 50%",           */
+/*  "Above 50%") via mapApiToDashboardData's `casaGauge.bands` — parsed    */
+/*  there into `{ low, high }`. If that's missing or fails validation      */
+/*  here, this falls back to a sensible DEFAULT_BANDS split rather than    */
+/*  breaking, so a malformed/missing API field never crashes the gauge.    */
+/*                                                                          */
+/*  The gauge box is a fixed SQUARE on purpose: the needle is a plain SVG  */
+/*  overlay using a 300×300 coordinate system, which only lines up with    */
+/*  the Pie underneath it when the container is square.                   */
+/* ---------------------------------------------------------------------- */
+
+import React from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
+import { GlassPanel, PanelHeader, textSecondarySx } from "./common";
+
+const DEFAULT_BANDS = { low: 35, high: 65 };
+
+/** Validates an API-derived `{ low, high }` pair before trusting it —
+ * both must be finite numbers, in range, and low strictly less than high.
+ * Falls back to DEFAULT_BANDS for anything else (missing, malformed, or
+ * nonsensical, e.g. low >= high). */
+function resolveBands(bands) {
+  if (
+    bands &&
+    typeof bands.low === "number" &&
+    typeof bands.high === "number" &&
+    Number.isFinite(bands.low) &&
+    Number.isFinite(bands.high) &&
+    bands.low >= 0 &&
+    bands.high <= 100 &&
+    bands.low < bands.high
+  ) {
+    return bands;
+  }
+  return DEFAULT_BANDS;
+}
+
+function statusFor(value, bands) {
+  if (value < bands.low) return "low";
+  if (value <= bands.high) return "mid";
+  return "high";
+}
+
+/**
+ * Props:
+ *  - config: { title, subtitle, value, centerLabel, bands?: { low, high } }
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
+ */
+export default function Gauge({ config, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const RADIAN = Math.PI / 180;
+  const VIEWBOX = 300;
+  const cx = VIEWBOX * 0.5; // matches the Pie's cx="50%"
+  const cy = VIEWBOX * 0.85; // matches the Pie's cy="85%" — NOT cx/cy * 0.85
+  const innerR = 95;
+  const GAUGE_SIZE = 280; // fixed + square — see note above
+
+  const bands = resolveBands(config.bands);
+  const statusBands = [
+    { name: `Below ${bands.low}%`, width: 33.3, key: "low" },
+    { name: `${bands.low}% – ${bands.high}%`, width: 33.3, key: "mid" },
+    { name: `Above ${bands.high}%`, width: 33.3, key: "high" },
+  ];
+
+  // The API can return casaGauge.value as null (not populated yet). Render
+  // an explicit "not available" state instead of NaN math / a broken needle.
+  const hasValue = typeof config.value === "number" && Number.isFinite(config.value);
+
+  const statusColor = {
+    low: theme.palette.error.main,
+    mid: theme.palette.warning.main,
+    high: theme.palette.success.main,
+  };
+  const bandData = statusBands.map((b) => ({ name: b.name, value: b.width }));
+  const currentStatus = hasValue ? statusFor(config.value, bands) : null;
+  const needleColor = hasValue ? statusColor[currentStatus] : theme.palette.text.disabled;
+
+  const clampedValue = hasValue ? Math.min(Math.max(config.value, 0), 100) : 0;
+  const needleAngle = 180 - (clampedValue / 100) * 180; // 0..180 -> deg, driven by the actual value
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader icon={PieChartRoundedIcon} title={config.title} />
+
+      <Box
+        sx={{
+          position: "relative",
+          width: GAUGE_SIZE,
+          height: GAUGE_SIZE,
+          mx: "auto",
+          mb: 1,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          <PieChart>
+            <Pie
+              data={bandData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="85%"
+              startAngle={180}
+              endAngle={0}
+              innerRadius={92}
+              outerRadius={130}
+              cornerRadius={4}
+              stroke="none"
+              isAnimationActive={false}
+            >
+              <Cell fill={statusColor.low} opacity={hasValue ? 1 : 0.35} />
+              <Cell fill={statusColor.mid} opacity={hasValue ? 1 : 0.35} />
+              <Cell fill={statusColor.high} opacity={hasValue ? 1 : 0.35} />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+
+        {/* needle + center readout, overlaid absolutely — cx/cy match the
+            Pie's actual cx="50%" cy="85%" exactly, so the needle's base
+            sits right at the pie center instead of drifting off it.
+            No needle at all when there's no value to point to. */}
+        {hasValue && (
+          <Box sx={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+            <svg viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`} width="100%" height="100%">
+              <circle cx={cx} cy={cy} r="7" fill={needleColor} />
+              <line
+                x1={cx}
+                y1={cy}
+                x2={cx + (innerR - 6) * Math.cos(needleAngle * RADIAN)}
+                y2={cy - (innerR - 6) * Math.sin(needleAngle * RADIAN)}
+                stroke={needleColor}
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+            </svg>
+          </Box>
+        )}
+
+        <Box sx={{ position: "absolute", left: 0, right: 0, bottom: 6, textAlign: "center" }}>
+          <Typography sx={{ fontSize: 30, fontWeight: 700, lineHeight: 1, color: needleColor }}>
+            {hasValue ? `${config.value.toFixed(1)}%` : "—"}
+          </Typography>
+          {!hasValue && (
+            <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500, mt: 0.5 }}>
+              Not available yet
+            </Typography>
+          )}
+        </Box>
+      </Box>
+
+      <Stack direction="row" spacing={2.5} justifyContent="center" flexWrap="wrap" sx={{ mt: 1.5 }}>
+        {statusBands.map((b) => (
+          <Stack key={b.key} direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: statusColor[b.key] }} />
+            <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }}>{b.name}</Typography>
+          </Stack>
+        ))}
+      </Stack>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  DepositsLoansDashboard.jsx — root component                            */
+/*  Purely presentational/compositional. Every number on screen comes      */
+/*  from the `data` prop, every drill-down from `fetchDrilldown`. Nothing  */
+/*  is imported or hardcoded here — see DashboardPage.jsx for how the real */
+/*  API's response gets mapped into this shape (mapApiToDashboardData.js). */
+/*                                                                          */
+/*  Loans section restored — the API now returns a `loans` object. Its     */
+/*  single item list drives both the composition treemap and the          */
+/*  breakdown bar panel below, the same way Deposits does with two         */
+/*  separate demand/time lists.                                           */
+/* ---------------------------------------------------------------------- */
+
+import React, { useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
+import { SectionHeader, textPrimarySx, textSecondarySx } from "./common";
+import HeatTree from "./HeatTree";
+import Gauge from "./Gauge";
+import BarPanel from "./BarPanel";
+
+/** Page title/subtitle. Only used once, kept inline rather than as its
+ * own file. */
+function DashboardHeader({ config }) {
+  return (
+    <Stack direction={{ xs: "column", lg: "row" }} alignItems={{ xs: "flex-start", lg: "center" }} justifyContent="space-between" spacing={2} sx={{ px: 0.5 }}>
+      <Box>
+        <Typography sx={{ ...textPrimarySx, fontSize: { xs: 20, md: 24 }, fontWeight: 700 }}>{config.title}</Typography>
+        {config.subtitle && <Typography sx={{ ...textSecondarySx, fontSize: 13, mt: 0.25 }}>{config.subtitle}</Typography>}
+      </Box>
+    </Stack>
+  );
+}
+
+/**
+ * Props:
+ *  - data: {
+ *      header: { title, subtitle },
+ *      casaGauge: { title, subtitle, value: number | null, centerLabel, bands?: { low, high } },
+ *      depositsComposition: {
+ *        title, subtitle,
+ *        items: { name, value, share, type }[],
+ *        legend: { name }[],
+ *        filterOptions?: string[], activeFilter?: string,
+ *      },
+ *      demandDeposits: { title, topValue, data: { name, value }[] },
+ *      termDeposits:   { title, topValue, data: { name, value }[] },
+ *      loansComposition: { title, subtitle, items, legend, filterOptions?, activeFilter? },
+ *      loansBreakdown:   { title, topValue, data: { name, value }[] },
+ *    }
+ *  - fetchDrilldown: optional (categoryName: string) => Promise<{title, subtitle, data} | null>
+ *    Passed straight through to every BarPanel. Omit it to make every bar
+ *    chart purely display-only (no drill-down) — there's currently no
+ *    drill-down endpoint, so callers should omit this for now.
+ */
+export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
+  const [selectedPanel, setSelectedPanel] = useState(null);
+
+  if (!data) return null;
+
+  return (
+    <Box sx={{ p: { xs: 1.5, md: 3 }, display: "flex", flexDirection: "column", gap: 2.5, minHeight: "100vh" }}>
+      {/* Header not needed for now — commented out, not deleted. Uncomment
+          to bring it back. */}
+      {/* <DashboardHeader config={data.header} /> */}
+
+      <SectionHeader title="Deposits" caption="Composition, tenure, and demand vs. term split" />
+      <HeatTree
+        config={data.depositsComposition}
+        icon={AccountBalanceRoundedIcon}
+        gradientDark="#0f3d3e"
+        gradientLight="#a7f3d0"
+        shareLabel="of deposits"
+        panelId="deposits-treemap"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr", lg: "1fr 1fr 1fr" }, gap: 2.5 }}>
+        <Gauge config={data.casaGauge} panelId="casa-gauge" selectedPanel={selectedPanel} onSelectPanel={setSelectedPanel} />
+        <BarPanel
+          icon={DescriptionRoundedIcon}
+          config={data.demandDeposits}
+          fetchDrilldown={fetchDrilldown}
+          panelId="demand-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <BarPanel
+          icon={DescriptionRoundedIcon}
+          config={data.termDeposits}
+          fetchDrilldown={fetchDrilldown}
+          panelId="term-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <SectionHeader title="Loans" caption="Composition and distribution across loan categories" />
+      <HeatTree
+        config={data.loansComposition}
+        icon={AccountBalanceWalletRoundedIcon}
+        gradientDark="#2e2258"
+        gradientLight="#efe6fd"
+        shareLabel="of loans"
+        panelId="loans-treemap"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+
+      <BarPanel
+        icon={TrendingUpRoundedIcon}
+        config={data.loansBreakdown}
+        titleOverride="Loan Distribution"
+        fetchDrilldown={fetchDrilldown}
+        panelId="loan-distribution-bar"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+    </Box>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  HeatTree.jsx                                                           */
+/*  A heatmap-style tile layout. Tile SIZE (both WIDTH and HEIGHT,         */
+/*  independently, not sharing a dimension with neighbors) grows with the  */
+/*  item's value, and tile COLOR is a continuous dark→light gradient tied  */
+/*  to the value itself.                                                  */
+/*                                                                          */
+/*  SIZING MODEL — read this before touching sizing again.                 */
+/*  Earlier versions used an actual "treemap" (recursive area-filling      */
+/*  split, like D3/Excel/Power BI treemaps). A real treemap MUST share one */
+/*  dimension between items in the same row/column — that's not a bug,    */
+/*  it's the geometry required to fill 100% of the area with no gaps or    */
+/*  overlaps. Per explicit request, this version drops that constraint:    */
+/*  every tile gets its own independent width AND height, computed only    */
+/*  from its own value — so two items never have to "share" a row height  */
+/*  or column width. The tradeoff (accepted per request): tiles are laid  */
+/*  out with CSS flex-wrap, so there can be leftover empty space at the    */
+/*  end of a row instead of a perfectly filled rectangle.                 */
+/*                                                                          */
+/*  Both width and height are computed as sqrt(value) — not value itself. */
+/*  With BOTH dimensions scaling by sqrt(value), the tile's AREA ends up   */
+/*  proportional to value (since side² ∝ (√value)² = value), which is the */
+/*  mathematically correct way to make a 2D shape's size represent a      */
+/*  1D number — the same reasoning bubble charts use for bubble radius.   */
+/*                                                                          */
+/*  Because size is a pure function of value, two items with the exact    */
+/*  same value automatically get the exact same size — no special-case    */
+/*  grouping logic needed for that anymore.                               */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import { GlassPanel, PanelHeader, MiniSelect, RADIUS, textSecondarySx } from "./common";
+import { heatColor, mixHex, getColor, formatAmount } from "./utils";
+
+/* ---- Size formula --------------------------------------------------------
+ * Tune these two numbers to make the smallest/largest tiles bigger or
+ * smaller overall — nothing else needs to change.
+ *   MIN_SIZE  = size (px) for the smallest value in the set — the floor,
+ *               so a tiny value never becomes an unreadable sliver.
+ *   MAX_EXTRA = how much bigger the largest value's tile gets on top of
+ *               MIN_SIZE (so the largest tile is MIN_SIZE + MAX_EXTRA). */
+const MIN_SIZE = 96;
+const MAX_EXTRA = 150;
+
+function sizeForRatio(ratio) {
+  return MIN_SIZE + ratio * MAX_EXTRA;
+}
+
+/** A single tile. `size` is an explicit pixel width AND height — this
+ * tile doesn't know or care what its neighbors are sized. */
+function Tile({ item, size, color, shareLabel, onClick }) {
+  const theme = useTheme();
+  const fg = theme.palette.getContrastText(color);
+  const dense = size < 130; // smaller tiles use tighter text so content still fits
+  const sheen = mixHex(color, "#ffffff", 0.16);
+
+  return (
+    <Box
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      sx={{
+        width: size,
+        height: size,
+        flexShrink: 0,
+        borderRadius: RADIUS.sm,
+        p: dense ? 1 : 1.5,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        overflow: "hidden",
+        cursor: onClick ? "pointer" : "default",
+        background: `linear-gradient(135deg, ${sheen} 0%, ${color} 55%)`,
+        color: fg,
+        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+        "&:hover": { transform: "scale(1.03)", boxShadow: theme.shadows[6], zIndex: 1 },
+      }}
+    >
+      <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: dense ? 11 : 13, fontWeight: 600, opacity: 0.92, lineHeight: 1.25 }} noWrap>
+        {item.name}
+      </Typography>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: dense ? 13 : 19, fontWeight: 700, lineHeight: 1.2 }} noWrap>
+          {formatAmount(item.value)}
+        </Typography>
+        {!dense && (
+          <Typography sx={{ fontFamily: theme.typography.fontFamily, fontSize: 11.5, opacity: 0.82, mt: 0.25 }}>
+            {item.share}% {shareLabel}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+/** Color-dot + label legend row, wraps cleanly regardless of item count. */
+function Legend({ items, colorFor }) {
+  const theme = useTheme();
+  return (
+    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(136px, 1fr))", rowGap: 0.85, columnGap: 1.5 }}>
+      {items.map((l, i) => (
+        <Stack key={l.name} direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: colorFor ? colorFor(l.name) : getColor(l.name, i, theme), flexShrink: 0 }} />
+          <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }} noWrap>
+            {l.name}
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - config: { title, subtitle, items: {name, value, share, type}[], legend: {name}[],
+ *              filterOptions?: string[], activeFilter?: string }
+ *    Each item's `type` drives the filter dropdown below — `filterOptions[0]`
+ *    is treated as "show everything"; any other option filters items down
+ *    to `item.type === selectedOption`.
+ *  - icon: MUI icon component for the panel header
+ *  - gradientDark / gradientLight: hex strings, this section's gradient
+ *    endpoints (e.g. navy→sky for deposits, purple→lavender for loans)
+ *  - shareLabel: string appended after each tile's percentage, e.g.
+ *    "of deposits" / "of loans"
+ *  - onTileClick: optional (item) => void. Tiles are display-only (just a
+ *    hover lift) unless this is provided.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in DashboardPage.jsx).
+ */
+export default function HeatTree({
+  config,
+  icon = Inventory2RoundedIcon,
+  gradientDark,
+  gradientLight,
+  shareLabel = "of total",
+  onTileClick,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const hasFilter = Array.isArray(config.filterOptions) && config.filterOptions.length > 1;
+  const [filter, setFilter] = useState(config.activeFilter || (hasFilter ? config.filterOptions[0] : undefined));
+  const showAll = !hasFilter || filter === config.filterOptions[0];
+
+  const items = useMemo(() => {
+    if (showAll) return config.items;
+    return config.items.filter((it) => it.type === filter);
+  }, [config.items, filter, showAll]);
+
+  const legend = useMemo(() => {
+    if (showAll) return config.legend;
+    const names = new Set(items.map((it) => it.name));
+    return config.legend.filter((l) => names.has(l.name));
+  }, [config.legend, showAll, items]);
+
+  const colorFor = useMemo(() => {
+    const values = items.map((it) => it.value);
+    const minValue = values.length ? Math.min(...values) : 0;
+    const maxValue = values.length ? Math.max(...values) : 0;
+    return (value) => heatColor(value, minValue, maxValue, gradientDark, gradientLight);
+  }, [items, gradientDark, gradientLight]);
+
+  // Legend needs a color BY NAME (it doesn't have each item's value handy),
+  // so look the real value up before calling colorFor.
+  const legendColorFor = useMemo(() => {
+    const byName = new Map(items.map((it) => [it.name, it.value]));
+    return (name) => (byName.has(name) ? colorFor(byName.get(name)) : undefined);
+  }, [items, colorFor]);
+
+  const sortedItems = useMemo(() => [...items].sort((a, b) => b.value - a.value), [items]);
+  const maxValue = sortedItems.length ? sortedItems[0].value : 0;
+
+  return (
+    <GlassPanel selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader
+        icon={icon}
+        title={config.title}
+        action={hasFilter ? <MiniSelect options={config.filterOptions} value={filter} onChange={setFilter} /> : undefined}
+      />
+      {config.subtitle && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography>
+      )}
+
+      {/* flex-wrap, not a treemap grid: every tile gets its own independent
+          width/height, so rows can end with leftover empty space instead
+          of every tile in a row being forced to share one height. */}
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+        {sortedItems.map((item) => {
+          const ratio = maxValue > 0 ? Math.sqrt(Math.max(0, item.value)) / Math.sqrt(maxValue) : 0;
+          return (
+            <Tile
+              key={item.name}
+              item={item}
+              size={sizeForRatio(ratio)}
+              color={colorFor(item.value)}
+              shareLabel={shareLabel}
+              onClick={onTileClick ? () => onTileClick(item) : undefined}
+            />
+          );
+        })}
+      </Box>
+
+      <Legend items={legend} colorFor={legendColorFor} />
+    </GlassPanel>
+  );
+}
 
