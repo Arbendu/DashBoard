@@ -21,3 +21,4 @@ Tile	OKLCH	Hex
 4	oklch(0.69 0.24 10)	#ff0054 — coral red
 5	oklch(0.76 0.19 35)	#ff0048
 6	oklch(0.88 0.16 91)	#ff005c
+7 oklch(0.72 0.14 190) (≈ #22d3ee)
