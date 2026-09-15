@@ -131,6 +131,7 @@ export default function BarChart({ data, onBarClick }) {
 
 
 
+
 /* ---------------------------------------------------------------------- */
 /*  BarPanel.jsx                                                           */
 /*  REUSABLE: one panel type, used for every bar-chart section in the      */
@@ -225,6 +226,8 @@ export default function BarPanel({ icon, config, titleOverride, fetchDrilldown, 
     </GlassPanel>
   );
 }
+
+
 
 
 
@@ -426,8 +429,6 @@ export function BackButton({ onBack }) {
 
 
 
-
-
 /* ---------------------------------------------------------------------- */
 /*  DashboardPage.jsx — main entry point / the ONE place the real API      */
 /*  gets wired in.                                                        */
@@ -607,17 +608,58 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
       {/* Header not needed for now — commented out, not deleted. Uncomment
           to bring it back. */}
       {/* <DashboardHeader config={data.header} /> */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <HeatTree
+          config={data.depositsComposition}
+          icon={AccountBalanceRoundedIcon}
+          gradientDark="#0f3d3e"
+          gradientLight="#a7f3d0"
+          shareLabel="of deposits"
+          panelId="deposits-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <HeatTree
+          config={data.loansComposition}
+          icon={AccountBalanceWalletRoundedIcon}
+          gradientDark="#2e2258"
+          gradientLight="#efe6fd"
+          shareLabel="of loans"
+          panelId="loans-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
 
-      <HeatTree
-        config={data.depositsComposition}
-        icon={AccountBalanceRoundedIcon}
-        gradientDark="#0f3d3e"
-        gradientLight="#a7f3d0"
-        shareLabel="of deposits"
-        panelId="deposits-treemap"
-        selectedPanel={selectedPanel}
-        onSelectPanel={setSelectedPanel}
-      />
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "2fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <BarPanel
+          icon={TrendingUpRoundedIcon}
+          config={data.loansBreakdown}
+          titleOverride="Loan Distribution"
+          fetchDrilldown={fetchDrilldown}
+          panelId="loan-distribution-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <Gauge
+          config={data.casaGauge}
+          panelId="casa-gauge"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
 
       <Box
         sx={{
@@ -643,44 +685,10 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
           onSelectPanel={setSelectedPanel}
         />
       </Box>
-
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-          gap: 2.5,
-        }}
-      >
-        <HeatTree
-          config={data.loansComposition}
-          icon={AccountBalanceWalletRoundedIcon}
-          gradientDark="#2e2258"
-          gradientLight="#efe6fd"
-          shareLabel="of loans"
-          panelId="loans-treemap"
-          selectedPanel={selectedPanel}
-          onSelectPanel={setSelectedPanel}
-        />
-        <Gauge
-          config={data.casaGauge}
-          panelId="casa-gauge"
-          selectedPanel={selectedPanel}
-          onSelectPanel={setSelectedPanel}
-        />
-      </Box>
-
-      <BarPanel
-        icon={TrendingUpRoundedIcon}
-        config={data.loansBreakdown}
-        titleOverride="Loan Distribution"
-        fetchDrilldown={fetchDrilldown}
-        panelId="loan-distribution-bar"
-        selectedPanel={selectedPanel}
-        onSelectPanel={setSelectedPanel}
-      />
     </Box>
   );
 }
+
 
 
 
@@ -927,34 +935,28 @@ export default function Gauge({
 
 
 
+
 /* ---------------------------------------------------------------------- */
 /*  HeatTree.jsx                                                           */
-/*  A heatmap-style tile layout. Tile SIZE (both WIDTH and HEIGHT,         */
-/*  independently, not sharing a dimension with neighbors) grows with the  */
-/*  item's value, and tile COLOR is a continuous dark→light gradient tied  */
-/*  to the value itself.                                                  */
+/*  A real, area-filling treemap — like the Recharts "Bundle Size          */
+/*  Treemap" reference: rectangles are sized so their AREA is exactly      */
+/*  proportional to value, and together they fill 100% of the space with   */
+/*  no gaps. Bigger value = visibly bigger rectangle; color is a           */
+/*  continuous dark→light gradient tied to the value itself.               */
 /*                                                                          */
-/*  SIZING MODEL — read this before touching sizing again.                 */
-/*  Earlier versions used an actual "treemap" (recursive area-filling      */
-/*  split, like D3/Excel/Power BI treemaps). A real treemap MUST share one */
-/*  dimension between items in the same row/column — that's not a bug,    */
-/*  it's the geometry required to fill 100% of the area with no gaps or    */
-/*  overlaps. Per explicit request, this version drops that constraint:    */
-/*  every tile gets its own independent width AND height, computed only    */
-/*  from its own value — so two items never have to "share" a row height  */
-/*  or column width. The tradeoff (accepted per request): tiles are laid  */
-/*  out with CSS flex-wrap, so there can be leftover empty space at the    */
-/*  end of a row instead of a perfectly filled rectangle.                 */
+/*  LAYOUT — `buildTreemap` (utils.js) does the actual math: a recursive   */
+/*  "slice and dice" split (this is the standard treemap algorithm — the   */
+/*  same idea D3/Excel/Power BI treemaps use). It returns each item's box  */
+/*  as { x, y, w, h } in PERCENT of the container, which this component    */
+/*  positions with `position: absolute`.                                  */
 /*                                                                          */
-/*  Both width and height are computed as sqrt(value) — not value itself. */
-/*  With BOTH dimensions scaling by sqrt(value), the tile's AREA ends up   */
-/*  proportional to value (since side² ∝ (√value)² = value), which is the */
-/*  mathematically correct way to make a 2D shape's size represent a      */
-/*  1D number — the same reasoning bubble charts use for bubble radius.   */
-/*                                                                          */
-/*  Because size is a pure function of value, two items with the exact    */
-/*  same value automatically get the exact same size — no special-case    */
-/*  grouping logic needed for that anymore.                               */
+/*  Small tiles naturally end up too small to show full text — that's      */
+/*  expected treemap behavior (see the reference image: its smallest       */
+/*  cells are just a color swatch, no label at all). This component        */
+/*  scales down to a value-only label, then to no label, as a tile shrinks */
+/*  — it never lets text force a tile wider than its assigned box (that    */
+/*  was the earlier overflow bug — `minWidth: 0` + `overflow: hidden`      */
+/*  below are what actually prevent it, keep both on any tile).            */
 /* ---------------------------------------------------------------------- */
 
 import React, { useMemo, useState } from "react";
@@ -968,91 +970,104 @@ import {
   RADIUS,
   textSecondarySx,
 } from "./common";
-import { heatColor, mixHex, getColor, formatAmount } from "./utils";
+import {
+  heatColor,
+  mixHex,
+  getColor,
+  buildTreemap,
+  formatAmount,
+} from "./utils";
 
-/* ---- Size formula --------------------------------------------------------
- * Tune these two numbers to make the smallest/largest tiles bigger or
- * smaller overall — nothing else needs to change.
- *   MIN_SIZE  = size (px) for the smallest value in the set — the floor,
- *               so a tiny value never becomes an unreadable sliver.
- *   MAX_EXTRA = how much bigger the largest value's tile gets on top of
- *               MIN_SIZE (so the largest tile is MIN_SIZE + MAX_EXTRA). */
-const MIN_SIZE = 96;
-const MAX_EXTRA = 100;
-
-function sizeForRatio(ratio) {
-  return MIN_SIZE + ratio * MAX_EXTRA;
-}
-
-/** A single tile. `size` is an explicit pixel width AND height — this
- * tile doesn't know or care what its neighbors are sized. */
-function Tile({ item, size, color, shareLabel, onClick }) {
+/** A single treemap cell, positioned by percent within the container. */
+function Tile({ item, x, y, w, h, color, shareLabel, onClick }) {
   const theme = useTheme();
   const fg = theme.palette.getContrastText(color);
-  const dense = size < 130; // smaller tiles use tighter text so content still fits
   const sheen = mixHex(color, "#ffffff", 0.16);
+
+  // Tiny tiles can't fit a name + amount + share line — the reference
+  // treemap just shows a bare color swatch for its smallest cells, so we
+  // follow the same pattern instead of forcing text to overflow.
+  const showFull = w >= 14 && h >= 16;
+  const showValueOnly = !showFull && w >= 7 && h >= 9;
 
   return (
     <Box
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onClick={onClick}
       sx={{
-        width: size,
-        height: size,
-        flexShrink: 0,
-        borderRadius: RADIUS.sm,
-        p: dense ? 1 : 1.5,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        overflow: "hidden",
-        cursor: onClick ? "pointer" : "default",
-        background: `linear-gradient(135deg, ${sheen} 0%, ${color} 55%)`,
-        color: fg,
-        transition: "transform 0.18s ease, box-shadow 0.18s ease",
-        "&:hover": {
-          transform: "scale(1.03)",
-          boxShadow: theme.shadows[6],
-          zIndex: 1,
-        },
+        position: "absolute",
+        left: `${x}%`,
+        top: `${y}%`,
+        width: `${w}%`,
+        height: `${h}%`,
+        p: 0.25, // thin gap between tiles, matching the reference's grid look
+        boxSizing: "border-box",
       }}
     >
-      <Typography
+      <Box
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onClick={onClick}
         sx={{
-          fontFamily: theme.typography.fontFamily,
-          fontSize: dense ? 11 : 13,
-          fontWeight: 600,
-          opacity: 0.92,
-          lineHeight: 1.25,
+          width: "100%",
+          height: "100%",
+          minWidth: 0, // prevents un-wrapped text from forcing this box wider than its %
+          minHeight: 0,
+          //borderRadius: RADIUS.sm,
+          p: showFull ? 1.25 : 0.75,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          overflow: "hidden", // hard clip — a tile can never visually escape its assigned box
+          cursor: onClick ? "pointer" : "default",
+          background: `linear-gradient(135deg, ${sheen} 0%, ${color} 55%)`,
+          color: fg,
+          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+          "&:hover": {
+            transform: "scale(1.015)",
+            boxShadow: theme.shadows[6],
+            zIndex: 1,
+          },
         }}
-        noWrap
       >
-        {item.name}
-      </Typography>
-      <Box sx={{ minWidth: 0 }}>
-        <Typography
-          sx={{
-            fontFamily: theme.typography.fontFamily,
-            fontSize: dense ? 13 : 19,
-            fontWeight: 700,
-            lineHeight: 1.2,
-          }}
-          noWrap
-        >
-          {formatAmount(item.value)}
-        </Typography>
-        {!dense && (
+        {showFull && (
           <Typography
             sx={{
               fontFamily: theme.typography.fontFamily,
-              fontSize: 11.5,
-              opacity: 0.82,
-              mt: 0.25,
+              fontSize: 13,
+              fontWeight: 600,
+              opacity: 0.92,
+              lineHeight: 1.25,
             }}
+            noWrap
           >
-            {item.share}% {shareLabel}
+            {item.name}
           </Typography>
+        )}
+        {(showFull || showValueOnly) && (
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              sx={{
+                fontFamily: theme.typography.fontFamily,
+                fontSize: showFull ? 18 : 11,
+                fontWeight: 700,
+                lineHeight: 1.2,
+              }}
+              noWrap
+            >
+              {formatAmount(item.value)}
+            </Typography>
+            {showFull && (
+              <Typography
+                sx={{
+                  fontFamily: theme.typography.fontFamily,
+                  fontSize: 11,
+                  opacity: 0.82,
+                  mt: 0.25,
+                }}
+              >
+                {item.share}% {shareLabel}
+              </Typography>
+            )}
+          </Box>
         )}
       </Box>
     </Box>
@@ -1110,7 +1125,7 @@ function Legend({ items, colorFor }) {
  *  - onTileClick: optional (item) => void. Tiles are display-only (just a
  *    hover lift) unless this is provided.
  *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
- *    wiring, shared with every other panel (see GlassPanel in DashboardPage.jsx).
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
  */
 export default function HeatTree({
   config,
@@ -1157,11 +1172,18 @@ export default function HeatTree({
       byName.has(name) ? colorFor(byName.get(name)) : undefined;
   }, [items, colorFor]);
 
+  // Largest → smallest so the biggest rectangle reliably lands in a
+  // corner (matching the reference image's layout), and so the split
+  // algorithm groups similarly-sized items together.
   const sortedItems = useMemo(
     () => [...items].sort((a, b) => b.value - a.value),
     [items],
   );
-  const maxValue = sortedItems.length ? sortedItems[0].value : 0;
+
+  const layout = useMemo(
+    () => buildTreemap(sortedItems, 0, 0, 100, 100, true),
+    [sortedItems],
+  );
 
   return (
     <GlassPanel
@@ -1189,32 +1211,37 @@ export default function HeatTree({
         </Typography>
       )}
 
-      {/* flex-wrap, not a treemap grid: every tile gets its own independent
-          width/height, so rows can end with leftover empty space instead
-          of every tile in a row being forced to share one height. */}
-      <Box sx={{ display: "flex", flexWrap: "nowrap", gap: 1 }}>
-        {sortedItems.map((item) => {
-          const ratio =
-            maxValue > 0
-              ? Math.sqrt(Math.max(0, item.value)) / Math.sqrt(maxValue)
-              : 0;
-          return (
-            <Tile
-              key={item.name}
-              item={item}
-              size={sizeForRatio(ratio)}
-              color={colorFor(item.value)}
-              shareLabel={shareLabel}
-              onClick={onTileClick ? () => onTileClick(item) : undefined}
-            />
-          );
-        })}
+      {/* Fixed-height frame the treemap fills exactly — overflow: hidden is
+          a hard safety net so a tile can never visually spill past the
+          card even in an edge case. */}
+      <Box
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: { xs: 320, sm: 360, md: 400 },
+          overflow: "hidden",
+        }}
+      >
+        {layout.map(({ item, x, y, w, h }) => (
+          <Tile
+            key={item.name}
+            item={item}
+            x={x}
+            y={y}
+            w={w}
+            h={h}
+            color={colorFor(item.value)}
+            shareLabel={shareLabel}
+            onClick={onTileClick ? () => onTileClick(item) : undefined}
+          />
+        ))}
       </Box>
 
       <Legend items={legend} colorFor={legendColorFor} />
     </GlassPanel>
   );
 }
+
 
 
 
@@ -1596,4 +1623,3 @@ export function buildTreemap(items, x, y, w, h, horizontal = true) {
     ...buildTreemap(secondGroup, x, y + h1, w, h - h1, true),
   ];
 }
-
