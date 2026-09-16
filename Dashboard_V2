@@ -1,4 +1,196 @@
 /* ---------------------------------------------------------------------- */
+/*  utils.js — pure logic only, no React, no data                          */
+/*  Two independent things live here on purpose: color math and treemap    */
+/*  layout math. Both are "given numbers, return numbers/strings" — no     */
+/*  UI, no imports beyond each other — so they're easy to unit test and    */
+/*  easy to find without hunting through component files.                 */
+/* ---------------------------------------------------------------------- */
+
+/* ---- Color helpers ----------------------------------------------------
+ * Deposit categories use a fixed brand palette, ordered dark → light so a
+ * treemap sorted largest→smallest value reads as a heatmap. Everything
+ * else (bar panels, drill-down subcategories, loan categories) falls back
+ * to a theme-derived palette assigned BY POSITION, guaranteeing every
+ * bar/tile in one chart gets a distinct color (a name-hash fallback was
+ * tried first but collides for some category names). */
+
+export const FIXED_DEPOSIT_COLORS = {
+  "Term Deposit": "#0c2340",
+  "Saving Bank A/c": "#1e3a5f",
+  "Current A/c": "#3b82f6",
+  "Cash Credit Cr Balance": "#2d8a9e",
+  "Special Term Deposit": "#0ea5e9",
+  "Other Demand Deposit": "#06b6d4",
+  "Other Term Deposit": "#5cbdb9",
+  "Certificate of Deposit": "#7dd3fc",
+};
+
+export function hexToRgb(hex) {
+  const clean = hex.replace("#", "");
+  const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export function rgbToHex([r, g, b]) {
+  return `#${[r, g, b]
+    .map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+export function mixHex(hexA, hexB, t) {
+  const a = hexToRgb(hexA);
+  const b = hexToRgb(hexB);
+  return rgbToHex(a.map((v, i) => v + (b[i] - v) * t));
+}
+
+/** Continuous color between `lightHex` (lowest value in the set) and
+ * `darkHex` (highest value) — the heatmap gradient used by treemap tiles. */
+export function heatColor(value, min, max, darkHex, lightHex) {
+  const t = max === min ? 1 : (value - min) / (max - min);
+  return mixHex(lightHex, darkHex, t);
+}
+
+/** A theme-derived categorical palette (10 tones cycling through
+ * primary/info/secondary/success at dark/main/light weights). */
+export function fallbackPalette(theme) {
+  const p = theme.palette;
+  return [
+    p.primary.dark,
+    p.info.dark,
+    p.secondary.dark,
+    p.success.dark,
+    p.primary.main,
+    p.info.main,
+    p.secondary.main,
+    p.success.main,
+    p.primary.light,
+    p.info.light,
+  ].filter(Boolean);
+}
+
+/** Resolves a category's color: the fixed deposit hex if it's a known
+ * deposit category, otherwise a theme color chosen by its position in the
+ * current list (guarantees every item in one chart gets a different
+ * color — pass the item's index within whichever list is being rendered). */
+export function getColor(name, index, theme) {
+  if (FIXED_DEPOSIT_COLORS[name]) return FIXED_DEPOSIT_COLORS[name];
+  const palette = fallbackPalette(theme);
+  return palette[index % palette.length];
+}
+
+/* ---- Heatmap categorical palette -----------------------------------------
+ * Fixed, per-tile colors for the treemap (HeatTree.jsx) — a DIFFERENT color
+ * per tile (cycling through this list by position), not a value-based
+ * gradient. From Color_scheme.txt, hex values taken exactly as listed
+ * (that file's OKLCH column doesn't match its own hex column — hex is the
+ * one being trusted here; if the real intent was the OKLCH values, this is
+ * the one place to fix). Applies to BOTH Deposits and Loans — same shared
+ * palette, not a separate one per section. */
+
+export const HEATMAP_PALETTE = [
+  "#6800ae", // deep violet
+  "#a300ff", // violet
+  "#ff00e4", // magenta
+  "#ff0054", // coral red
+  "#ff0048",
+  "#ff0042",
+  "#ff005c",
+  "#ff00d6",
+];
+
+/** Cycles through HEATMAP_PALETTE by position — pass the item's index
+ * within whichever list is being colored. */
+export function paletteColorForIndex(index) {
+  return HEATMAP_PALETTE[index % HEATMAP_PALETTE.length];
+}
+
+/* ---- Amount formatting --------------------------------------------------
+ * ⚠️ ASSUMPTION, NOT CONFIRMED: the API's raw numbers (e.g. 987654.32) are
+ * treated here as plain rupees and shown with Indian-style comma grouping.
+ * This is the ONE function to change once the real unit is confirmed — no
+ * other file formats an amount directly, they all call this. */
+
+export function formatAmount(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
+  return `₹ ${Number(value).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/* ---- Name normalization --------------------------------------------------
+ * The API sends some category names with inconsistent casing/whitespace
+ * (e.g. "term deposit " vs "Certificate of Deposit"). Trims whitespace and,
+ * for names that match a FIXED_DEPOSIT_COLORS key case-insensitively, snaps
+ * to that key's exact casing — so color lookup and any name-based matching
+ * stay reliable regardless of how the API happens to capitalize things. */
+
+export function normalizeDepositName(rawName = "") {
+  const trimmed = String(rawName).trim();
+  const canonical = Object.keys(FIXED_DEPOSIT_COLORS).find(
+    (key) => key.toLowerCase() === trimmed.toLowerCase()
+  );
+  return canonical || trimmed;
+}
+
+/* ---- Treemap layout ----------------------------------------------------
+ * A simple recursive "slice and dice" treemap: split the (already
+ * value-sorted) list roughly in half by cumulative value, lay that out as
+ * two rectangles side by side (or stacked), and recurse into each half
+ * alternating direction. Tile SIZE ends up proportional to value.
+ *
+ * Pure function — takes an items array (each needs a numeric `value`) plus
+ * a starting rect (x, y, w, h in percent) and returns
+ * [{ item, x, y, w, h }, ...] covering that rect. */
+
+export function buildTreemap(items, x, y, w, h, horizontal = true) {
+  if (items.length === 0) return [];
+  if (items.length === 1) return [{ item: items[0], x, y, w, h }];
+
+  const total = items.reduce((sum, it) => sum + it.value, 0);
+  let splitIndex = 1;
+  let bestDiff = Infinity;
+  let runningSum = 0;
+  for (let k = 0; k < items.length - 1; k += 1) {
+    runningSum += items[k].value;
+    const diff = Math.abs(runningSum - total / 2);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      splitIndex = k + 1;
+    }
+  }
+
+  const firstGroup = items.slice(0, splitIndex);
+  const secondGroup = items.slice(splitIndex);
+  const firstSum = firstGroup.reduce((sum, it) => sum + it.value, 0);
+  const ratio = total === 0 ? 0.5 : firstSum / total;
+
+  if (horizontal) {
+    const w1 = w * ratio;
+    return [
+      ...buildTreemap(firstGroup, x, y, w1, h, false),
+      ...buildTreemap(secondGroup, x + w1, y, w - w1, h, false),
+    ];
+  }
+  const h1 = h * ratio;
+  return [
+    ...buildTreemap(firstGroup, x, y, w, h1, true),
+    ...buildTreemap(secondGroup, x, y + h1, w, h - h1, true),
+  ];
+}
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
 /*  DepositsLoansDashboard.jsx — root component                            */
 /*  Purely presentational/compositional. Every number on screen comes      */
 /*  from the `data` prop, every drill-down from `fetchDrilldown`. Nothing  */
