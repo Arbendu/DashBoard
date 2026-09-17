@@ -1,1 +1,486 @@
+/* ---------------------------------------------------------------------- */
+/*  ComposedBarChart.jsx                                                   */
+/*  The "composed" view every BarPanel can toggle into (see the icon       */
+/*  button in BarPanel.jsx) — styled after the Recharts "Line Bar Area     */
+/*  Composed Chart" reference. Bars show each category's actual value      */
+/*  (same data, same colors as the plain BarChart); the line + filled      */
+/*  area underneath it show the RUNNING CUMULATIVE TOTAL across            */
+/*  categories in the order given — a second, genuinely different metric  */
+/*  derived from the same one series (there's only one real metric here,   */
+/*  unlike the reference's 4 separate series, so cumulative total is the   */
+/*  meaningful second line to add).                                       */
+/*                                                                          */
+/*  Reuses wrapLabel/WrappedAxisTick from BarChart.jsx rather than         */
+/*  duplicating the word-wrap logic.                                      */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  Area,
+  Bar,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { RADIUS } from "./common";
+import { formatAmount } from "./utils";
+import { wrapLabel, WrappedAxisTick } from "./BarChart";
+
+const RUNNING_TOTAL_COLOR = "#eb6834"; // distinct from the per-item bar colors, consistent regardless of section
+
+/** Tooltip showing BOTH series for the hovered category — the plain
+ * BarChart's tooltip only shows one value, this needs two. */
+function ComposedTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const bar = payload.find((p) => p.dataKey === "value");
+  const line = payload.find((p) => p.dataKey === "cumulative");
+
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary", mb: 0.25 }}>{label}</Typography>
+      {bar && (
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: bar.payload.__color }}>
+          {formatAmount(bar.value)}
+        </Typography>
+      )}
+      {line && (
+        <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: RUNNING_TOTAL_COLOR }}>
+          Running total: {formatAmount(line.value)}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Same data shape as BarChart: { name: string, value: number, __color: string }[].
+ * `onBarClick` — optional (item) => void, same drill-down contract as BarChart.
+ */
+export default function ComposedBarChart({ data, onBarClick }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  const chartData = useMemo(() => {
+    let running = 0;
+    return data.map((d) => {
+      running += d.value;
+      return { ...d, cumulative: running };
+    });
+  }, [data]);
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        height: 232,
+        "& svg:focus, & svg *:focus": { outline: "none" },
+      }}
+    >
+      <ResponsiveContainer>
+        <ComposedChart data={chartData} margin={{ top: 20, right: 16, left: -4, bottom: 6 }}>
+          <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+          <XAxis
+            dataKey="name"
+            tick={<WrappedAxisTick fill={theme.palette.text.secondary} />}
+            axisLine={{ stroke: gridStrokeColor }}
+            tickLine={false}
+            interval={0}
+            height={38}
+          />
+          <YAxis tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={32} />
+          <Tooltip cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }} content={(props) => <ComposedTooltip {...props} theme={theme} />} />
+          <Area
+            dataKey="cumulative"
+            fill={RUNNING_TOTAL_COLOR}
+            fillOpacity={0.12}
+            stroke="none"
+            isAnimationActive={false}
+          />
+          <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={40}>
+            {chartData.map((d) => (
+              <Cell
+                key={d.name}
+                fill={d.__color}
+                cursor={onBarClick ? "pointer" : "default"}
+                onClick={
+                  onBarClick
+                    ? (e) => {
+                        e.stopPropagation();
+                        onBarClick(d);
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </Bar>
+          <Line
+            dataKey="cumulative"
+            stroke={RUNNING_TOTAL_COLOR}
+            strokeWidth={2}
+            dot={{ r: 3, fill: RUNNING_TOTAL_COLOR, strokeWidth: 0 }}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: -1 }}>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: theme.palette.primary.main }} />
+          <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Amount</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: RUNNING_TOTAL_COLOR }} />
+          <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Running total</Typography>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  BarPanel.jsx                                                           */
+/*  REUSABLE: one panel type, used for every bar-chart section in the      */
+/*  dashboard (Demand Deposits, Term Deposits, Loan Distribution) — only   */
+/*  `config`, `icon`, and `titleOverride` differ per call.                 */
+/*                                                                          */
+/*  DrilldownBarChart lives in this same file: it's the view BarPanel      */
+/*  swaps to when a bar is clicked, and nothing else ever renders it, so   */
+/*  keeping them apart didn't add clarity — just an extra file to open.    */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import { GlassPanel, PanelHeader, MiniSelect, BackButton, textSecondarySx } from "./common";
+import BarChart from "./BarChart";
+import ComposedBarChart from "./ComposedBarChart";
+import { getColor } from "./utils";
+
+/** Renders a drill-down view: a title, optional subtitle, a "Back" button,
+ * and a bar chart for whatever { title, subtitle, data } it's handed.
+ * Knows nothing about deposits/loans specifically. */
+function DrilldownBarChart({ icon, config, onBack }) {
+  const theme = useTheme();
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  return (
+    <>
+      <PanelHeader icon={icon} title={config.title} action={<BackButton onBack={onBack} />} />
+      {config.subtitle && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography>
+      )}
+      <BarChart data={chartData} />
+    </>
+  );
+}
+
+/** Small icon button in the top-right of the panel header that swaps
+ * between the plain bar chart and the composed (bar + line + area) view,
+ * preserving the exact same data either way. */
+function ChartViewToggle({ view, onToggle }) {
+  const isComposed = view === "composed";
+  return (
+    <Tooltip title={isComposed ? "Switch to bar view" : "Switch to line/area view"}>
+      <IconButton
+        size="small"
+        onClick={(e) => {
+          e.stopPropagation(); // keep this separate from the panel's own click-to-select
+          onToggle();
+        }}
+      >
+        {isComposed ? <BarChartRoundedIcon fontSize="small" /> : <ShowChartRoundedIcon fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+/**
+ * Props:
+ *  - config: { title, topValue?, data: {name, value}[], dropdownOptions?, activeOption? }
+ *  - icon: MUI icon component for the panel header
+ *  - titleOverride: optional string shown instead of config.title (two
+ *    configs can share a generic title, e.g. two "Loans" sources)
+ *  - fetchDrilldown: (categoryName: string) => Promise<{title, subtitle, data} | null>
+ *    Injected as a prop, not imported, so this component has no hardcoded
+ *    dependency on a specific data-fetching module — swap it for a real
+ *    API call wherever BarPanel is used. Omit it to disable drill-down.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
+ */
+export default function BarPanel({ icon, config, titleOverride, fetchDrilldown, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const hasDropdown = Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
+  const [option, setOption] = useState(config.activeOption || (hasDropdown ? config.dropdownOptions[0] : undefined));
+  const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
+  const [chartView, setChartView] = useState("bar"); // "bar" | "composed"
+
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  const handleBarClick = (item) => {
+    if (!fetchDrilldown) return;
+    fetchDrilldown(item.name).then((result) => {
+      if (result) setDrilldown(result);
+    });
+  };
+
+  if (drilldown) {
+    return (
+      <GlassPanel sx={{ p: 3 }}>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader
+        icon={icon}
+        title={titleOverride || config.title}
+        action={
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {hasDropdown && <MiniSelect options={config.dropdownOptions} value={option} onChange={setOption} />}
+            <ChartViewToggle view={chartView} onToggle={() => setChartView((v) => (v === "bar" ? "composed" : "bar"))} />
+          </Stack>
+        }
+      />
+      {config.topValue && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 2 }}>
+          Largest category: <b>{config.topValue}</b>
+        </Typography>
+      )}
+      {chartView === "composed" ? (
+        <ComposedBarChart data={chartData} onBarClick={fetchDrilldown ? handleBarClick : undefined} />
+      ) : (
+        <BarChart data={chartData} onBarClick={fetchDrilldown ? handleBarClick : undefined} />
+      )}
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  BarChart.jsx                                                           */
+/*  REUSABLE: the ONE place the Recharts bar-chart markup lives. Every     */
+/*  bar panel in the dashboard (Demand Deposits, Term Deposits, Loan       */
+/*  Distribution, and every drill-down) renders through this with         */
+/*  different `data` passed in — nothing is duplicated per section.       */
+/*                                                                          */
+/*  ChartTooltip lives here too: it's only ever used by this chart, so a   */
+/*  separate file for a 20-line component just added another place to     */
+/*  look for something that's really part of this one piece.              */
+/* ---------------------------------------------------------------------- */
+
+import React from "react";
+import { Box, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  Bar,
+  BarChart as RechartsBarChart, // aliased so it doesn't clash with our own component name below
+  CartesianGrid,
+  Cell,
+  LabelList,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { RADIUS } from "./common";
+import { getColor, formatAmount } from "./utils";
+
+/** Breaks a label into up to `maxLines` lines of roughly `maxCharsPerLine`
+ * characters each, greedily packing whole words per line. If there are
+ * still leftover words after `maxLines`, the last line gets an ellipsis
+ * rather than silently dropping them. This is what actually fixes
+ * overlapping X-axis labels — horizontal text that wraps onto 2 short
+ * lines instead of being forced onto one long line (which is what
+ * overlapped) or rotated (which was explicitly not wanted). */
+export function wrapLabel(text, maxCharsPerLine = 10, maxLines = 2) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  let wordIndex = 0;
+
+  while (wordIndex < words.length && lines.length < maxLines) {
+    const word = words[wordIndex];
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && candidate.length > maxCharsPerLine) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+    wordIndex += 1;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+
+  // Words left over beyond maxLines — mark the last line as truncated.
+  if (wordIndex < words.length && lines.length) {
+    lines[lines.length - 1] = `${lines[lines.length - 1]}…`;
+  }
+  return lines;
+}
+
+/** Custom XAxis tick — renders `payload.value` as up to 2 word-wrapped
+ * lines instead of Recharts' default single-line (which is what was
+ * overlapping between adjacent bars). */
+export function WrappedAxisTick({ x, y, payload, fill }) {
+  const lines = wrapLabel(payload.value);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {lines.map((line, i) => (
+        <text key={i} x={0} y={0} dy={12 + i * 12} textAnchor="middle" fontSize={10} fill={fill}>
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+}
+
+/** Custom Recharts tooltip content — a small frosted card matching the
+ * rest of the dashboard, in place of Recharts' unstyled default. Reads the
+ * swatch color straight off the hovered data point (`__color`), with a
+ * same-index fallback if it's absent. */
+function ChartTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const value = payload[0].value;
+  const color = payload[0].payload?.__color || getColor(label, 0, theme);
+
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>{label}</Typography>
+      <Typography sx={{ fontSize: 14, fontWeight: 800, color }}>{formatAmount(value)}</Typography>
+    </Box>
+  );
+}
+
+/**
+ * Renders a { name, value, __color }[] dataset as a bar chart.
+ *
+ * Props:
+ *  - data: { name: string, value: number, __color: string }[]
+ *    `__color` should already be resolved (see utils.getColor) by whoever
+ *    builds this array — this component doesn't know what a "deposit" is.
+ *  - onBarClick: optional (item) => void. When provided, bars become
+ *    clickable (drill-down); when omitted, bars are display-only.
+ */
+export default function BarChart({ data, onBarClick }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        height: 232,
+        // Recharts marks chart elements focusable for accessibility; without
+        // this, clicking a bar leaves a default browser focus outline behind.
+        "& svg:focus, & svg *:focus": { outline: "none" },
+      }}
+    >
+      <ResponsiveContainer>
+        <RechartsBarChart data={data} margin={{ top: 28, right: 16, left: -4, bottom: 6 }} barCategoryGap="32%">
+          <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+          <XAxis
+            dataKey="name"
+            tick={<WrappedAxisTick fill={theme.palette.text.secondary} />}
+            axisLine={{ stroke: gridStrokeColor }}
+            tickLine={false}
+            interval={0}
+            height={38}
+          />
+          <YAxis tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={32} />
+          <Tooltip cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }} content={(props) => <ChartTooltip {...props} theme={theme} />} />
+          <Bar dataKey="value" radius={[7, 7, 0, 0]} maxBarSize={48}>
+            {data.map((d) => (
+              <Cell
+                key={d.name}
+                fill={d.__color}
+                cursor={onBarClick ? "pointer" : "default"}
+                onClick={
+                  onBarClick
+                    ? (e) => {
+                        e.stopPropagation(); // keep bar-click separate from any panel-level click handler
+                        onBarClick(d);
+                      }
+                    : undefined
+                }
+              />
+            ))}
+            <LabelList
+              dataKey="value"
+              position="top"
+              formatter={(v) => formatAmount(v)}
+              style={{ fontSize: 11, fontWeight: 700, fill: theme.palette.text.primary }}
+            />
+          </Bar>
+        </RechartsBarChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
 
