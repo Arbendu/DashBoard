@@ -28,6 +28,63 @@ import { glass } from "../../theme/themePrimitives"; // adjust path to match you
 import { RADIUS } from "./common";
 import { getColor, formatAmount } from "./utils";
 
+/** Breaks a label into up to `maxLines` lines of roughly `maxCharsPerLine`
+ * characters each, greedily packing whole words per line. If there are
+ * still leftover words after `maxLines`, the last line gets an ellipsis
+ * rather than silently dropping them. This is what actually fixes
+ * overlapping X-axis labels — horizontal text that wraps onto 2 short
+ * lines instead of being forced onto one long line (which is what
+ * overlapped) or rotated (which was explicitly not wanted). */
+function wrapLabel(text, maxCharsPerLine = 10, maxLines = 2) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  let wordIndex = 0;
+
+  while (wordIndex < words.length && lines.length < maxLines) {
+    const word = words[wordIndex];
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && candidate.length > maxCharsPerLine) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+    wordIndex += 1;
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+
+  // Words left over beyond maxLines — mark the last line as truncated.
+  if (wordIndex < words.length && lines.length) {
+    lines[lines.length - 1] = `${lines[lines.length - 1]}…`;
+  }
+  return lines;
+}
+
+/** Custom XAxis tick — renders `payload.value` as up to 2 word-wrapped
+ * lines instead of Recharts' default single-line (which is what was
+ * overlapping between adjacent bars). */
+function WrappedAxisTick({ x, y, payload, fill }) {
+  const lines = wrapLabel(payload.value);
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {lines.map((line, i) => (
+        <text
+          key={i}
+          x={0}
+          y={0}
+          dy={12 + i * 12}
+          textAnchor="middle"
+          fontSize={10}
+          fill={fill}
+        >
+          {line}
+        </text>
+      ))}
+    </g>
+  );
+}
+
 /** Custom Recharts tooltip content — a small frosted card matching the
  * rest of the dashboard, in place of Recharts' unstyled default. Reads the
  * swatch color straight off the hovered data point (`__color`), with a
@@ -49,8 +106,14 @@ function ChartTooltip({ active, payload, label, theme }) {
         boxShadow: theme.shadows[8],
       }}
     >
-      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>{label}</Typography>
-      <Typography sx={{ fontSize: 14, fontWeight: 800, color }}>{formatAmount(value)}</Typography>
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}
+      >
+        {label}
+      </Typography>
+      <Typography sx={{ fontSize: 14, fontWeight: 800, color }}>
+        {formatAmount(value)}
+      </Typography>
     </Box>
   );
 }
@@ -68,39 +131,52 @@ function ChartTooltip({ active, payload, label, theme }) {
 export default function BarChart({ data, onBarClick }) {
   const theme = useTheme();
   const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
-  const longLabels = data.length > 5;
 
   return (
     <Box
       sx={{
         width: "100%",
-        height: longLabels ? 320 : 270,
+        height: 232,
         // Recharts marks chart elements focusable for accessibility; without
         // this, clicking a bar leaves a default browser focus outline behind.
         "& svg:focus, & svg *:focus": { outline: "none" },
       }}
     >
       <ResponsiveContainer>
-        <RechartsBarChart data={data} margin={{ top: 28, right: 16, left: -4, bottom: longLabels ? 70 : 6 }} barCategoryGap="32%">
-          <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+        <RechartsBarChart
+          data={data}
+          margin={{ top: 28, right: 16, left: -4, bottom: 6 }}
+          barCategoryGap="32%"
+        >
+          <CartesianGrid
+            vertical={false}
+            stroke={gridStrokeColor}
+            strokeDasharray="3 5"
+          />
           <XAxis
             dataKey="name"
-            tick={{ fontSize: longLabels ? 9.5 : 10.5, fill: theme.palette.text.secondary }}
+            tick={<WrappedAxisTick fill={theme.palette.text.secondary} />}
             axisLine={{ stroke: gridStrokeColor }}
             tickLine={false}
             interval={0}
-            angle={longLabels ? -35 : 0}
-            textAnchor={longLabels ? "end" : "middle"}
-            height={longLabels ? 70 : 30}
+            height={38}
           />
-          <YAxis tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={32} />
-          <Tooltip cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }} content={(props) => <ChartTooltip {...props} theme={theme} />} />
+          <YAxis
+            tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <Tooltip
+            cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+            content={(props) => <ChartTooltip {...props} theme={theme} />}
+          />
           <Bar dataKey="value" radius={[7, 7, 0, 0]} maxBarSize={48}>
             {data.map((d) => (
               <Cell
                 key={d.name}
                 fill={d.__color}
-                cursor={onBarClick ? "default" : "pointer"}
+                cursor={onBarClick ? "pointer" : "default"}
                 onClick={
                   onBarClick
                     ? (e) => {
@@ -115,7 +191,11 @@ export default function BarChart({ data, onBarClick }) {
               dataKey="value"
               position="top"
               formatter={(v) => formatAmount(v)}
-              style={{ fontSize: 11, fontWeight: 700, fill: theme.palette.text.primary }}
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                fill: theme.palette.text.primary,
+              }}
             />
           </Bar>
         </RechartsBarChart>
@@ -123,6 +203,7 @@ export default function BarChart({ data, onBarClick }) {
     </Box>
   );
 }
+
 
 
 
@@ -146,7 +227,13 @@ export default function BarChart({ data, onBarClick }) {
 import React, { useMemo, useState } from "react";
 import { Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
-import { GlassPanel, PanelHeader, MiniSelect, BackButton, textSecondarySx } from "./common";
+import {
+  GlassPanel,
+  PanelHeader,
+  MiniSelect,
+  BackButton,
+  textSecondarySx,
+} from "./common";
 import BarChart from "./BarChart";
 import { getColor } from "./utils";
 
@@ -156,15 +243,27 @@ import { getColor } from "./utils";
 function DrilldownBarChart({ icon, config, onBack }) {
   const theme = useTheme();
   const chartData = useMemo(
-    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
-    [config.data, theme]
+    () =>
+      config.data.map((d, i) => ({
+        ...d,
+        __color: getColor(d.name, i, theme),
+      })),
+    [config.data, theme],
   );
 
   return (
     <>
-      <PanelHeader icon={icon} title={config.title} action={<BackButton onBack={onBack} />} />
+      <PanelHeader
+        icon={icon}
+        title={config.title}
+        action={<BackButton onBack={onBack} />}
+      />
       {config.subtitle && (
-        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography>
+        <Typography
+          sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}
+        >
+          {config.subtitle}
+        </Typography>
       )}
       <BarChart data={chartData} />
     </>
@@ -184,15 +283,31 @@ function DrilldownBarChart({ icon, config, onBack }) {
  *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
  *    wiring, shared with every other panel (see GlassPanel in common.jsx).
  */
-export default function BarPanel({ icon, config, titleOverride, fetchDrilldown, panelId, selectedPanel, onSelectPanel }) {
+export default function BarPanel({
+  icon,
+  config,
+  titleOverride,
+  fetchDrilldown,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
   const theme = useTheme();
-  const hasDropdown = Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
-  const [option, setOption] = useState(config.activeOption || (hasDropdown ? config.dropdownOptions[0] : undefined));
+  const hasDropdown =
+    Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
+  const [option, setOption] = useState(
+    config.activeOption ||
+      (hasDropdown ? config.dropdownOptions[0] : undefined),
+  );
   const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
 
   const chartData = useMemo(
-    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
-    [config.data, theme]
+    () =>
+      config.data.map((d, i) => ({
+        ...d,
+        __color: getColor(d.name, i, theme),
+      })),
+    [config.data, theme],
   );
 
   const handleBarClick = (item) => {
@@ -205,29 +320,48 @@ export default function BarPanel({ icon, config, titleOverride, fetchDrilldown, 
   if (drilldown) {
     return (
       <GlassPanel sx={{ p: 3 }}>
-        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+        <DrilldownBarChart
+          icon={icon}
+          config={drilldown}
+          onBack={() => setDrilldown(null)}
+        />
       </GlassPanel>
     );
   }
 
   return (
-    <GlassPanel sx={{ p: 3, pb: 0 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+    <GlassPanel
+      sx={{ p: 3 }}
+      selected={selectedPanel === panelId}
+      onClick={() => onSelectPanel?.(panelId)}
+    >
       <PanelHeader
         icon={icon}
         title={titleOverride || config.title}
-        action={hasDropdown ? <MiniSelect options={config.dropdownOptions} value={option} onChange={setOption} /> : undefined}
+        action={
+          hasDropdown ? (
+            <MiniSelect
+              options={config.dropdownOptions}
+              value={option}
+              onChange={setOption}
+            />
+          ) : undefined
+        }
       />
       {config.topValue && (
-        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 2 }}>
+        <Typography
+          sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 2 }}
+        >
           Largest category: <b>{config.topValue}</b>
         </Typography>
       )}
-      <BarChart data={chartData} onBarClick={fetchDrilldown ? handleBarClick : undefined} />
+      <BarChart
+        data={chartData}
+        onBarClick={fetchDrilldown ? handleBarClick : undefined}
+      />
     </GlassPanel>
   );
 }
-
-
 
 
 
@@ -429,6 +563,9 @@ export function BackButton({ onBack }) {
 
 
 
+
+
+
 /* ---------------------------------------------------------------------- */
 /*  DashboardPage.jsx — main entry point / the ONE place the real API      */
 /*  gets wired in.                                                        */
@@ -505,6 +642,7 @@ export default function DashboardPage() {
   // so every bar renders display-only until one exists (see BarPanel.jsx).
   return <DepositsLoansDashboard data={dashboardData} />;
 }
+
 
 
 
@@ -611,7 +749,7 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          gridTemplateColumns: { xs: "1fr", md: "3fr 2fr" },
           gap: 2.5,
         }}
       >
@@ -640,7 +778,7 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "2fr 1fr" },
+          gridTemplateColumns: { xs: "1fr", md: "3fr 1fr" },
           gap: 2.5,
         }}
       >
@@ -771,7 +909,7 @@ export default function Gauge({
   const cx = VIEWBOX * 0.5; // matches the Pie's cx="50%"
   const cy = VIEWBOX * 0.85; // matches the Pie's cy="85%" — NOT cx/cy * 0.85
   const innerR = 95;
-  const GAUGE_SIZE = 280; // fixed + square — see note above
+  const GAUGE_SIZE = 220; // fixed + square — see note above
 
   const bands = resolveBands(config.bands);
   const statusBands = [
@@ -827,8 +965,8 @@ export default function Gauge({
               cy="85%"
               startAngle={180}
               endAngle={0}
-              innerRadius={92}
-              outerRadius={130}
+              innerRadius={80}
+              outerRadius={110}
               cornerRadius={4}
               stroke="none"
               isAnimationActive={false}
@@ -868,9 +1006,9 @@ export default function Gauge({
         <Box
           sx={{
             position: "absolute",
-            left: 0,
+            left: 10,
             right: 0,
-            bottom: 6,
+            bottom: 1,
             textAlign: "center",
           }}
         >
@@ -936,6 +1074,8 @@ export default function Gauge({
 
 
 
+
+
 /* ---------------------------------------------------------------------- */
 /*  HeatTree.jsx                                                           */
 /*  A real, area-filling treemap — like the Recharts "Bundle Size          */
@@ -987,7 +1127,7 @@ function Tile({ item, x, y, w, h, color, shareLabel, onClick }) {
   // Tiny tiles can't fit a name + amount + share line — the reference
   // treemap just shows a bare color swatch for its smallest cells, so we
   // follow the same pattern instead of forcing text to overflow.
-  const showFull = w >= 14 && h >= 16;
+  const showFull = w >= 18 && h >= 25;
   const showValueOnly = !showFull && w >= 7 && h >= 9;
 
   return (
@@ -1047,7 +1187,7 @@ function Tile({ item, x, y, w, h, color, shareLabel, onClick }) {
             <Typography
               sx={{
                 fontFamily: theme.typography.fontFamily,
-                fontSize: showFull ? 18 : 11,
+                fontSize: showFull ? 15 : 11,
                 fontWeight: 700,
                 lineHeight: 1.2,
               }}
@@ -1218,7 +1358,7 @@ export default function HeatTree({
         sx={{
           position: "relative",
           width: "100%",
-          height: { xs: 320, sm: 360, md: 400 },
+          height: { xs: 200, sm: 220, md: 260 },
           overflow: "hidden",
         }}
       >
@@ -1241,6 +1381,8 @@ export default function HeatTree({
     </GlassPanel>
   );
 }
+
+
 
 
 
@@ -1468,6 +1610,7 @@ export default function mapApiToDashboardData(section) {
 
 
 
+
 /* ---------------------------------------------------------------------- */
 /*  utils.js — pure logic only, no React, no data                          */
 /*  Two independent things live here on purpose: color math and treemap    */
@@ -1547,6 +1690,32 @@ export function getColor(name, index, theme) {
   if (FIXED_DEPOSIT_COLORS[name]) return FIXED_DEPOSIT_COLORS[name];
   const palette = fallbackPalette(theme);
   return palette[index % palette.length];
+}
+
+/* ---- Heatmap categorical palette -----------------------------------------
+ * Fixed, per-tile colors for the treemap (HeatTree.jsx) — a DIFFERENT color
+ * per tile (cycling through this list by position), not a value-based
+ * gradient. From Color_scheme.txt, hex values taken exactly as listed
+ * (that file's OKLCH column doesn't match its own hex column — hex is the
+ * one being trusted here; if the real intent was the OKLCH values, this is
+ * the one place to fix). Applies to BOTH Deposits and Loans — same shared
+ * palette, not a separate one per section. */
+
+export const HEATMAP_PALETTE = [
+  "#6800ae", // deep violet
+  "#a300ff", // violet
+  "#ff00e4", // magenta
+  "#ff0054", // coral red
+  "#ff0048",
+  "#ff0042",
+  "#ff005c",
+  "#ff00d6",
+];
+
+/** Cycles through HEATMAP_PALETTE by position — pass the item's index
+ * within whichever list is being colored. */
+export function paletteColorForIndex(index) {
+  return HEATMAP_PALETTE[index % HEATMAP_PALETTE.length];
 }
 
 /* ---- Amount formatting --------------------------------------------------
