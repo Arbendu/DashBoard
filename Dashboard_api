@@ -175,3 +175,75 @@
     "success": true,
     "timestamp": "2026-09-16T06:58:18.313365100Z"
 }
+
+
+
+
+
+
+
+
+
+
+// New response
+{ 
+
+  "key": "demandDeposits", 
+
+  "title": "Demand Deposits", 
+
+  "dates": [ 
+
+    "2026-07-27", 
+
+    "2026-07-28", 
+
+    "2026-07-29" 
+
+  ], 
+
+  "series": [ 
+
+    { 
+
+      "name": "Saving Bank A/c", 
+
+      "type": "Demand Deposit", 
+
+      "values": [45.0, 46.5, 44.0] 
+
+    }, 
+
+    { 
+
+      "name": "Current A/c", 
+
+      "type": "Demand Deposit", 
+
+      "values": [12.0, 11.5, 12.5] 
+
+    }, 
+
+    { 
+
+      "name": "Cash Credit Cr Balance", 
+
+      "type": "Demand Deposit", 
+
+      "values": [78.0, 77.0, 79.0] 
+
+    }, 
+
+    { 
+
+      "name": "Other Demand Deposit", 
+
+      "type": "Demand Deposit", 
+
+      "values": [33.0, 34.0, 33.5] 
+
+    } 
+
+  ] 
+
+}   
