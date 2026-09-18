@@ -1,1 +1,286 @@
+/* ---------------------------------------------------------------------- */
+/*  BiaxialLineChart.jsx                                                   */
+/*  The alternate view every BarPanel can toggle into (see the icon        */
+/*  button in BarPanel.jsx) — replaces the earlier bar+line+area composed  */
+/*  chart. This is the canonical Recharts "Biaxial Line Chart" pattern:    */
+/*  two independent Y-axes, one per line, since "Amount" (per category)    */
+/*  and "Running total" (cumulative across categories) are on very         */
+/*  different scales — plotting both against the same axis would flatten  */
+/*  the smaller one.                                                       */
+/*                                                                          */
+/*  Reuses wrapLabel/WrappedAxisTick from BarChart.jsx rather than         */
+/*  duplicating the word-wrap logic.                                      */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { RADIUS } from "./common";
+import { formatAmount } from "./utils";
+import { wrapLabel, WrappedAxisTick } from "./BarChart";
+
+const AMOUNT_COLOR = "#378ADD"; // left axis — matches the "Amount" legend swatch
+const RUNNING_TOTAL_COLOR = "#eb6834"; // right axis — distinct from AMOUNT_COLOR regardless of section
+
+/** Tooltip showing BOTH series (each on its own axis) for the hovered
+ * category. */
+function BiaxialTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const amount = payload.find((p) => p.dataKey === "value");
+  const cumulative = payload.find((p) => p.dataKey === "cumulative");
+
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary", mb: 0.25 }}>{label}</Typography>
+      {amount && (
+        <Typography sx={{ fontSize: 13, fontWeight: 800, color: AMOUNT_COLOR }}>{formatAmount(amount.value)}</Typography>
+      )}
+      {cumulative && (
+        <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: RUNNING_TOTAL_COLOR }}>
+          Running total: {formatAmount(cumulative.value)}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Same data shape as BarChart: { name: string, value: number }[]
+ * (`__color` is ignored here — a biaxial line chart has exactly one color
+ * per LINE, not one per category, so per-item bar colors don't apply).
+ */
+export default function BiaxialLineChart({ data }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  const chartData = useMemo(() => {
+    let running = 0;
+    return data.map((d) => {
+      running += d.value;
+      return { ...d, cumulative: running };
+    });
+  }, [data]);
+
+  return (
+    <Box
+      sx={{
+        width: "100%",
+        height: 232,
+        "& svg:focus, & svg *:focus": { outline: "none" },
+      }}
+    >
+      <ResponsiveContainer>
+        <LineChart data={chartData} margin={{ top: 20, right: 8, left: -4, bottom: 6 }}>
+          <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+          <XAxis
+            dataKey="name"
+            tick={<WrappedAxisTick fill={theme.palette.text.secondary} />}
+            axisLine={{ stroke: gridStrokeColor }}
+            tickLine={false}
+            interval={0}
+            height={38}
+          />
+          <YAxis
+            yAxisId="left"
+            tick={{ fontSize: 11, fill: AMOUNT_COLOR }}
+            axisLine={false}
+            tickLine={false}
+            width={32}
+          />
+          <YAxis
+            yAxisId="right"
+            orientation="right"
+            tick={{ fontSize: 11, fill: RUNNING_TOTAL_COLOR }}
+            axisLine={false}
+            tickLine={false}
+            width={36}
+          />
+          <Tooltip content={(props) => <BiaxialTooltip {...props} theme={theme} />} />
+          <Line
+            yAxisId="left"
+            dataKey="value"
+            name="Amount"
+            stroke={AMOUNT_COLOR}
+            strokeWidth={2}
+            dot={{ r: 3, fill: AMOUNT_COLOR, strokeWidth: 0 }}
+            isAnimationActive={false}
+          />
+          <Line
+            yAxisId="right"
+            dataKey="cumulative"
+            name="Running total"
+            stroke={RUNNING_TOTAL_COLOR}
+            strokeWidth={2}
+            dot={{ r: 3, fill: RUNNING_TOTAL_COLOR, strokeWidth: 0 }}
+            isAnimationActive={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+      <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: -1 }}>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: AMOUNT_COLOR }} />
+          <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Amount</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: RUNNING_TOTAL_COLOR }} />
+          <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Running total</Typography>
+        </Stack>
+      </Stack>
+    </Box>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  BarPanel.jsx                                                           */
+/*  REUSABLE: one panel type, used for every bar-chart section in the      */
+/*  dashboard (Demand Deposits, Term Deposits, Loan Distribution) — only   */
+/*  `config`, `icon`, and `titleOverride` differ per call.                 */
+/*                                                                          */
+/*  DrilldownBarChart lives in this same file: it's the view BarPanel      */
+/*  swaps to when a bar is clicked, and nothing else ever renders it, so   */
+/*  keeping them apart didn't add clarity — just an extra file to open.    */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import { GlassPanel, PanelHeader, MiniSelect, BackButton, textSecondarySx } from "./common";
+import BarChart from "./BarChart";
+import BiaxialLineChart from "./BiaxialLineChart";
+import { getColor } from "./utils";
+
+/** Renders a drill-down view: a title, optional subtitle, a "Back" button,
+ * and a bar chart for whatever { title, subtitle, data } it's handed.
+ * Knows nothing about deposits/loans specifically. */
+function DrilldownBarChart({ icon, config, onBack }) {
+  const theme = useTheme();
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  return (
+    <>
+      <PanelHeader icon={icon} title={config.title} action={<BackButton onBack={onBack} />} />
+      {config.subtitle && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>{config.subtitle}</Typography>
+      )}
+      <BarChart data={chartData} />
+    </>
+  );
+}
+
+/** Small icon button in the top-right of the panel header that swaps
+ * between the plain bar chart and a biaxial line chart (Amount on the
+ * left axis, running total on the right axis), preserving the exact same
+ * data either way. */
+function ChartViewToggle({ view, onToggle }) {
+  const isBiaxial = view === "biaxial";
+  return (
+    <Tooltip title={isBiaxial ? "Switch to bar view" : "Switch to line view"}>
+      <IconButton
+        size="small"
+        onClick={(e) => {
+          e.stopPropagation(); // keep this separate from the panel's own click-to-select
+          onToggle();
+        }}
+      >
+        {isBiaxial ? <BarChartRoundedIcon fontSize="small" /> : <ShowChartRoundedIcon fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+/**
+ * Props:
+ *  - config: { title, topValue?, data: {name, value}[], dropdownOptions?, activeOption? }
+ *  - icon: MUI icon component for the panel header
+ *  - titleOverride: optional string shown instead of config.title (two
+ *    configs can share a generic title, e.g. two "Loans" sources)
+ *  - fetchDrilldown: (categoryName: string) => Promise<{title, subtitle, data} | null>
+ *    Injected as a prop, not imported, so this component has no hardcoded
+ *    dependency on a specific data-fetching module — swap it for a real
+ *    API call wherever BarPanel is used. Omit it to disable drill-down.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
+ */
+export default function BarPanel({ icon, config, titleOverride, fetchDrilldown, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const hasDropdown = Array.isArray(config.dropdownOptions) && config.dropdownOptions.length > 0;
+  const [option, setOption] = useState(config.activeOption || (hasDropdown ? config.dropdownOptions[0] : undefined));
+  const [drilldown, setDrilldown] = useState(null); // { title, subtitle, data } | null
+  const [chartView, setChartView] = useState("bar"); // "bar" | "biaxial"
+
+  const chartData = useMemo(
+    () => config.data.map((d, i) => ({ ...d, __color: getColor(d.name, i, theme) })),
+    [config.data, theme]
+  );
+
+  const handleBarClick = (item) => {
+    if (!fetchDrilldown) return;
+    fetchDrilldown(item.name).then((result) => {
+      if (result) setDrilldown(result);
+    });
+  };
+
+  if (drilldown) {
+    return (
+      <GlassPanel sx={{ p: 3 }}>
+        <DrilldownBarChart icon={icon} config={drilldown} onBack={() => setDrilldown(null)} />
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader
+        icon={icon}
+        title={titleOverride || config.title}
+        action={
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {hasDropdown && <MiniSelect options={config.dropdownOptions} value={option} onChange={setOption} />}
+            <ChartViewToggle view={chartView} onToggle={() => setChartView((v) => (v === "bar" ? "biaxial" : "bar"))} />
+          </Stack>
+        }
+      />
+      {config.topValue && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 2 }}>
+          Largest category: <b>{config.topValue}</b>
+        </Typography>
+      )}
+      {chartView === "biaxial" ? (
+        <BiaxialLineChart data={chartData} />
+      ) : (
+        <BarChart data={chartData} onBarClick={fetchDrilldown ? handleBarClick : undefined} />
+      )}
+    </GlassPanel>
+  );
+}
 
