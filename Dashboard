@@ -1,3 +1,66 @@
+// BankingData.json
+
+[
+  {
+    "key": "demandDeposits",
+    "title": "Demand Deposits",
+    "products": [
+      { "name": "Saving Bank A/c", "type": "Demand Deposit" },
+      { "name": "Current A/c", "type": "Demand Deposit" },
+      { "name": "Cash Credit Cr Balance", "type": "Demand Deposit" },
+      { "name": "Other Demand Deposit", "type": "Demand Deposit" }
+    ],
+    "data": [
+      { "date": "2026-09-14", "values": [44.0, 11.5, 76.5, 32.0] },
+      { "date": "2026-09-15", "values": [65.5, 32.2, 57.8, 30.5] },
+      { "date": "2026-09-16", "values": [14.8, 9.8, 87.2, 12.8] },
+      { "date": "2026-09-17", "values": [55.2, 10.1, 38.4, 53.2] },
+      { "date": "2026-09-18", "values": [85.0, 22.0, 58.0, 23.0] }
+    ]
+  },
+  {
+    "key": "timeDeposits",
+    "title": "Time Deposits",
+    "products": [
+      { "name": "Certificate of Deposit", "type": "Time Deposit" },
+      { "name": "Other Term Deposit", "type": "Time Deposit" },
+      { "name": "Special Term Deposit", "type": "Time Deposit" },
+      { "name": "Term Deposit", "type": "Time Deposit" }
+    ],
+    "data": [
+      { "date": "2026-09-14", "values": [63.0, 26.5, 79.5, 55.0] },
+      { "date": "2026-09-15", "values": [50.5, 47.3, 40.8, 36.4] },
+      { "date": "2026-09-16", "values": [20.8, 36.8, 70.2, 45.7] },
+      { "date": "2026-09-17", "values": [84.2, 67.1, 81.3, 26.2] },
+      { "date": "2026-09-18", "values": [34.0, 27.0, 51.0, 66.0] }
+    ]
+  },
+  {
+    "key": "loansBreakdown",
+    "title": "Loan Distribution",
+    "products": [
+      { "name": "Term Loan Account", "type": "Loan" },
+      { "name": "Agri Cash Credit", "type": "Loan" },
+      { "name": "Cash Credit", "type": "Loan" },
+      { "name": "Demand Loan", "type": "Loan" },
+      { "name": "Overdraft", "type": "Loan" },
+      { "name": "Bills Payable", "type": "Loan" }
+    ],
+    "data": [
+      { "date": "2026-09-14", "values": [27.5, 54.0, 40.5, 40.5, 72.0, 18.5] },
+      { "date": "2026-09-15", "values": [48.3, 85.5, 21.4, 81.8, 43.5, 39.3] },
+      { "date": "2026-09-16", "values": [17.8, 34.8, 25.8, 61.2, 82.8, 28.8] },
+      { "date": "2026-09-17", "values": [68.1, 55.2, 61.2, 52.4, 53.3, 59.1] },
+      { "date": "2026-09-18", "values": [38.0, 45.0, 31.0, 82.0, 63.0, 39.0] }
+    ]
+  }
+]
+
+
+
+
+
+
 /* ---------------------------------------------------------------------- */
 /*  BarChart.jsx                                                           */
 /*  REUSABLE: the ONE place the Recharts bar-chart markup lives. Every     */
@@ -211,6 +274,9 @@ export default function BarChart({ data, onBarClick }) {
 
 
 
+
+
+
 /* ---------------------------------------------------------------------- */
 /*  BarPanel.jsx                                                           */
 /*  REUSABLE: one panel type, used for every bar-chart section in the      */
@@ -401,6 +467,7 @@ export default function BarPanel({
     </GlassPanel>
   );
 }
+
 
 
 
@@ -618,9 +685,6 @@ export default function BiaxialLineChart({ data }) {
 
 
 
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  common.jsx — small, chart-agnostic building blocks                     */
 /*  GlassPanel, PanelHeader, MiniSelect, SectionHeader, BackButton, plus    */
@@ -633,7 +697,15 @@ export default function BiaxialLineChart({ data }) {
 /* ---------------------------------------------------------------------- */
 
 import React from "react";
-import { Box, Button, MenuItem, Paper, Select, Stack, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Typography,
+} from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
@@ -653,22 +725,20 @@ export function GlassPanel({ children, sx, selected, onClick, ...props }) {
   const theme = useTheme();
 
   return (
-    <Paper
+    <Box
       elevation={0}
       onClick={onClick}
       sx={{
         p: 2.5,
         borderRadius: RADIUS.lg,
         height: "100%",
-        background: glass.panel(0.5),
-        backdropFilter: "blur(12px) saturate(160%)",
-        "& .MuiOutlinedInput-notchedOutline": {
-          border: `1px solid ${glass.border}`,
-        },
-        "& .MuiSelect-select": { py: 0.75, pr: 4 },
-        WebkitBackdropFilter: "blur(24px) saturate(160%)",
-        border: `1px solid ${glass.border}`,
-        boxShadow: theme.shadows[6],
+        // Exact match to the Select dropdown's Paper: MUI's Menu/Popover
+        // uses theme.palette.background.paper (= glass.panel(0.25)) with
+        // no backdrop blur and no border — just its default elevation-8
+        // shadow. This is that same recipe, not an approximation of it.
+        background: glass.panel(0.25),
+        backdropFilter: "blur(5px)",
+        boxShadow: theme.shadows[4],
         cursor: onClick ? "pointer" : "default",
         transition:
           "box-shadow 0.25s ease, transform 0.25s ease, border-color 0.2s ease",
@@ -677,7 +747,7 @@ export function GlassPanel({ children, sx, selected, onClick, ...props }) {
       {...props}
     >
       {children}
-    </Paper>
+    </Box>
   );
 }
 
@@ -690,7 +760,14 @@ export function PanelHeader({ icon: Icon, title, action, iconColor }) {
   const color = iconColor || theme.palette.primary.main;
 
   return (
-    <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" rowGap={1} sx={{ mb: 2 }}>
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      flexWrap="wrap"
+      rowGap={1}
+      sx={{ mb: 2 }}
+    >
       <Stack direction="row" alignItems="center" spacing={1.25}>
         {Icon && (
           <Box
@@ -709,7 +786,14 @@ export function PanelHeader({ icon: Icon, title, action, iconColor }) {
             <Icon sx={{ fontSize: 19 }} />
           </Box>
         )}
-        <Typography sx={{ ...textPrimarySx, fontWeight: 700, fontSize: 15, letterSpacing: 0.1 }}>
+        <Typography
+          sx={{
+            ...textPrimarySx,
+            fontWeight: 700,
+            fontSize: 15,
+            letterSpacing: 0.1,
+          }}
+        >
           {title}
         </Typography>
       </Stack>
@@ -738,12 +822,18 @@ export function MiniSelect({ options, value, onChange }) {
         borderRadius: RADIUS.sm,
         background: glass.panel(0.5),
         backdropFilter: "blur(12px) saturate(160%)",
-        "& .MuiOutlinedInput-notchedOutline": { border: `1px solid ${glass.border}` },
+        "& .MuiOutlinedInput-notchedOutline": {
+          border: `1px solid ${glass.border}`,
+        },
         "& .MuiSelect-select": { py: 0.75, pr: 4 },
       }}
     >
       {options.map((opt) => (
-        <MenuItem key={opt} value={opt} sx={{ fontSize: 13, fontFamily: theme.typography.fontFamily }}>
+        <MenuItem
+          key={opt}
+          value={opt}
+          sx={{ fontSize: 13, fontFamily: theme.typography.fontFamily }}
+        >
           {opt}
         </MenuItem>
       ))}
@@ -759,14 +849,38 @@ export function SectionHeader({ title, caption }) {
   const theme = useTheme();
 
   return (
-    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ mt: 1.5, pl: 0.25 }}>
-      <Box sx={{ width: 4, height: 22, borderRadius: "999px", bgcolor: theme.palette.primary.main, flexShrink: 0 }} />
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1.25}
+      sx={{ mt: 1.5, pl: 0.25 }}
+    >
+      <Box
+        sx={{
+          width: 4,
+          height: 22,
+          borderRadius: "999px",
+          bgcolor: theme.palette.primary.main,
+          flexShrink: 0,
+        }}
+      />
       <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ ...textPrimarySx, fontSize: { xs: 15, md: 16.5 }, fontWeight: 600, lineHeight: 1.3 }}>
+        <Typography
+          sx={{
+            ...textPrimarySx,
+            fontSize: { xs: 15, md: 16.5 },
+            fontWeight: 600,
+            lineHeight: 1.3,
+          }}
+        >
           {title}
         </Typography>
         {caption && (
-          <Typography sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }}>{caption}</Typography>
+          <Typography
+            sx={{ ...textSecondarySx, fontSize: 11.5, fontWeight: 500 }}
+          >
+            {caption}
+          </Typography>
         )}
       </Box>
       <Box
@@ -840,7 +954,7 @@ import DepositsLoansDashboard from "./DepositsLoansDashboard";
 import mapApiToDashboardData from "./MapApiToDashboardData";
 import { textSecondarySx } from "./common";
 
-const DASHBOARD_ENDPOINT = "/DS/dashboard/getdashboarddata";
+const DASHBOARD_ENDPOINT = "/DS/dashboard/dashboard-data";
 
 export default function DashboardPage() {
   const { data: apiResponse, error, loading, callApi } = useApi();
@@ -859,6 +973,8 @@ export default function DashboardPage() {
   // the shape translation + derived calculations (share %, topValue, ...).
   const dashboardData = useMemo(() => {
     const section = apiResponse?.data?.staticDashboardData?.[0];
+    console.log("Dashboard response: ", section);
+    
     return mapApiToDashboardData(section);
   }, [apiResponse]);
 
@@ -906,17 +1022,745 @@ export default function DashboardPage() {
 
 
 
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  DateWiseBarPanel.jsx                                                   */
+/*  A multi-date panel — replaces the single-snapshot BarPanel for         */
+/*  Demand Deposits, Time Deposits, and Loan Distribution. Two things      */
+/*  live in this one panel:                                                */
+/*                                                                          */
+/*  1. OVERVIEW — every date in `section.data`.                            */
+/*  2. DRILL-DOWN — click ANY bar/point in the overview and it narrows to   */
+/*     that ONE date's breakdown, all categories, with a Back button to    */
+/*     return. Every bar/point in a cluster shares the same date, so a     */
+/*     click always drills into that date regardless of which one.        */
+/*                                                                          */
+/*  The icon button in the top-right corner swaps whichever view is        */
+/*  currently showing between BAR and LINE rendering.                     */
+/*                                                                          */
+/*  BAR VIEW = a "Line Bar Area Composed Chart" — grouped bars per          */
+/*  category (left axis, unchanged) PLUS a date-wise TOTAL (sum across     */
+/*  categories per date) drawn as a filled area + line on its own          */
+/*  independent right axis, since it's naturally several times larger      */
+/*  than any single category.                                             */
+/*                                                                          */
+/*  LINE VIEW = genuinely biaxial, but NOT via a separate "Total" line     */
+/*  (that moved to the bar view above). Instead, categories are split      */
+/*  into two axis groups by magnitude (smallest half -> left axis,         */
+/*  largest half -> right axis). This is the actual fix for "looks like a  */
+/*  straight/flat line": every category sharing ONE axis scaled to the     */
+/*  largest category's range squashes a smaller category's real day-to-   */
+/*  day movement down to nothing. Splitting by magnitude lets each axis    */
+/*  auto-scale tightly to its own group's actual range, so real movement   */
+/*  in EVERY category becomes visible — plus every line now uses a         */
+/*  smooth ("monotone") curve instead of straight segments.                */
+/*                                                                          */
+/*  Drill-down's line view keeps its own biaxial pairing (a category's     */
+/*  value on the left, the running cumulative total across categories on  */
+/*  the right) — that pairing is unrelated to the overview's and untouched */
+/*  by the changes above, just also drawn with smooth curves now.         */
+/*                                                                          */
+/*  DATA SHAPE — this consumes the "columnar" mock shape directly:         */
+/*    { title, products: [{name, type}], data: [{date, values}] }         */
+/*  where `values[i]` corresponds to `products[i]`. This is currently      */
+/*  wired to the local bankingData.json mock (see DepositsLoansDashboard   */
+/*  .jsx) rather than the live API — swap that one import for a real       */
+/*  fetch when a multi-date endpoint exists; nothing in this file needs    */
+/*  to change since it only cares about the shape above.                  */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  Area,
+  Bar,
+  ComposedChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart as RechartsLineChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import {
+  GlassPanel,
+  PanelHeader,
+  BackButton,
+  RADIUS,
+  textSecondarySx,
+} from "./common";
+import { getColor, formatAmount } from "./utils";
+
+const TOTAL_COLOR = "#eb6834"; // the date-wise Total's fixed accent color, in the bar/composed view only
+
+/** "2026-09-17" -> "17-Sep", matching the reference screenshot's axis
+ * label style. Falls back to the raw string if it doesn't parse (never
+ * throws on unexpected date formats). */
+function formatDateLabel(isoDate) {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+    .replace(" ", "-");
+}
+
+/** Custom line-chart dot that's actually clickable — recharts' `dot={{onClick}}`
+ * shorthand isn't a reliably documented event shape across versions; a
+ * custom render function is the well-documented way to get direct access
+ * to this point's own data row (including __isoDate) with no guessing. */
+function ClickableDot({ cx, cy, payload, fill, radius, onDotClick }) {
+  if (cx == null || cy == null) return null;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={radius}
+      fill={fill}
+      stroke="none"
+      style={{ cursor: onDotClick ? "pointer" : "default" }}
+      onClick={
+        onDotClick
+          ? (e) => {
+              e.stopPropagation();
+              onDotClick(payload.__isoDate);
+            }
+          : undefined
+      }
+    />
+  );
+}
+
+/** Small icon button, top-right, swapping the current view between bar
+ * and line — independent of whether that view is the overview or a
+ * drill-down. */
+function ChartTypeToggle({ chartType, onToggle }) {
+  const isLine = chartType === "line";
+  return (
+    <Tooltip title={isLine ? "Switch to bar chart" : "Switch to line chart"}>
+      <IconButton
+        size="small"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        {isLine ? (
+          <BarChartRoundedIcon fontSize="small" />
+        ) : (
+          <ShowChartRoundedIcon fontSize="small" />
+        )}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+/** Custom tooltip for the overview (multi-date) chart — lists every
+ * category's value, plus the date-wise Total when present, for the
+ * hovered date. Works for both the composed bar view and the line view,
+ * since it just lists whatever series are actually in `payload`. */
+function OverviewTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  // The composed bar view draws "Total" as both an Area (fill) and a Line
+  // (crisp stroke) sharing the same dataKey, so it appears twice in the
+  // raw payload — keep only the first occurrence of each series.
+  const seen = new Set();
+  const uniquePayload = payload.filter((p) => {
+    if (seen.has(p.dataKey)) return false;
+    seen.add(p.dataKey);
+    return true;
+  });
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+        maxWidth: 220,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: "text.secondary",
+          mb: 0.5,
+        }}
+      >
+        {label}
+      </Typography>
+      {uniquePayload.map((p) => (
+        <Stack
+          key={p.dataKey}
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          sx={{ mb: 0.25 }}
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: "2px",
+              bgcolor: p.color,
+              flexShrink: 0,
+            }}
+          />
+          <Typography sx={{ fontSize: 11.5, color: "text.primary" }} noWrap>
+            {p.dataKey}: <b>{formatAmount(p.value)}</b>
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+}
+
+/** Custom tooltip for the drill-down (single-date) chart — shows the
+ * category's own value (left axis) and, when present, the running
+ * cumulative total (right axis, line view only). */
+function DrilldownTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const valuePoint = payload.find((p) => p.dataKey === "value");
+  const cumulativePoint = payload.find((p) => p.dataKey === "cumulative");
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}
+      >
+        {label}
+      </Typography>
+      {valuePoint && (
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: valuePoint.payload.__color,
+          }}
+        >
+          {formatAmount(valuePoint.value)}
+        </Typography>
+      )}
+      {cumulativePoint && (
+        <Typography
+          sx={{ fontSize: 11.5, fontWeight: 600, color: TOTAL_COLOR }}
+        >
+          Running total: {formatAmount(cumulativePoint.value)}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - section: { title, products: {name, type}[], data: {date, values: number[]}[] }
+ *    (matches bankingData.json's per-section shape exactly)
+ *  - icon: MUI icon component for the panel header
+ *  - onDrilldownChange: optional (date: string | null) => void, fired
+ *    whenever the drill-down state changes — lets a parent know without
+ *    lifting the whole state up.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
+ */
+export default function DateWiseBarPanel({
+  section,
+  icon,
+  onDrilldownChange,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const theme = useTheme();
+  const [chartType, setChartType] = useState("bar"); // "bar" | "line" — applies to whichever view is active
+  const [selectedDate, setSelectedDate] = useState(null); // null = overview, else the drilled-into date
+
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  // One consistent color per PRODUCT (category), by its fixed position in
+  // the products list — never by date or render order, so a category's
+  // color never shifts between the overview and a drill-down.
+  const colorForProduct = useMemo(() => {
+    const map = new Map(
+      section.products.map((p, i) => [p.name, getColor(p.name, i, theme)]),
+    );
+    return (name) => map.get(name) || getColor(name, 0, theme);
+  }, [section.products, theme]);
+
+  // NEW: splits categories into a "left axis" and "right axis" group by
+  // magnitude (using each category's most recent value) — this is what
+  // makes the overview LINE view genuinely biaxial, and is the actual fix
+  // for lines looking flat: one shared axis scaled to the largest
+  // category flattens a smaller category's real day-to-day movement.
+  const axisGroupFor = useMemo(() => {
+    const latest = section.products.map((p, i) => ({
+      name: p.name,
+      value: section.data[section.data.length - 1]?.values[i] ?? 0,
+    }));
+    const sorted = [...latest].sort((a, b) => a.value - b.value);
+    const mid = Math.ceil(sorted.length / 2);
+    const map = new Map(
+      sorted.map((item, idx) => [item.name, idx < mid ? "left" : "right"]),
+    );
+    return (name) => map.get(name) || "left";
+  }, [section.products, section.data]);
+
+  // Overview rows: one object per date, with each product's value keyed
+  // by its own name — the shape Recharts' multi-series Bar/Line chart
+  // wants (one <Bar>/<Line> per key) — plus a "Total" (sum across
+  // products) for the composed bar view's right axis.
+  const overviewRows = useMemo(
+    () =>
+      section.data.map((row) => {
+        const entry = { date: formatDateLabel(row.date), __isoDate: row.date };
+        section.products.forEach((p, i) => {
+          entry[p.name] = row.values[i];
+        });
+        entry.Total = row.values.reduce((sum, v) => sum + v, 0);
+        return entry;
+      }),
+    [section.data, section.products],
+  );
+
+  // Drill-down rows: the single selected date's products, reshaped into
+  // the flat { name, value, __color } list the rest of the dashboard's
+  // single-series charts already use — plus a running "cumulative" total
+  // across categories (in the given product order) for the line view's
+  // right axis.
+  const drilldownRows = useMemo(() => {
+    if (!selectedDate) return [];
+    const row = section.data.find((d) => d.date === selectedDate);
+    if (!row) return [];
+    let running = 0;
+    return section.products.map((p, i) => {
+      running += row.values[i];
+      return {
+        name: p.name,
+        value: row.values[i],
+        cumulative: running,
+        __color: colorForProduct(p.name),
+      };
+    });
+  }, [selectedDate, section.data, section.products, colorForProduct]);
+
+  const handleDrillInto = (isoDate) => {
+    setSelectedDate(isoDate);
+    onDrilldownChange?.(isoDate);
+  };
+
+  const handleBack = () => {
+    setSelectedDate(null);
+    onDrilldownChange?.(null);
+  };
+
+  const isDrilldown = Boolean(selectedDate);
+  const drilldownLabel = isDrilldown ? formatDateLabel(selectedDate) : null;
+
+  return (
+    <GlassPanel
+      sx={{ p: 3 }}
+      selected={selectedPanel === panelId}
+      onClick={() => onSelectPanel?.(panelId)}
+    >
+      <PanelHeader
+        icon={icon}
+        title={
+          isDrilldown ? `${section.title} — ${drilldownLabel}` : section.title
+        }
+        action={
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {isDrilldown && <BackButton onBack={handleBack} />}
+            <ChartTypeToggle
+              chartType={chartType}
+              onToggle={() =>
+                setChartType((v) => (v === "bar" ? "line" : "bar"))
+              }
+            />
+          </Stack>
+        }
+      />
+      {!isDrilldown && (
+        <Typography
+          sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}
+        >
+          Click any bar to see that date's breakdown
+        </Typography>
+      )}
+
+      <Box
+        sx={{
+          width: "100%",
+          height: 260,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          {isDrilldown ? (
+            chartType === "line" ? (
+              <RechartsLineChart
+                data={drilldownRows}
+                margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke={gridStrokeColor}
+                  strokeDasharray="3 5"
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                  axisLine={{ stroke: gridStrokeColor }}
+                  tickLine={false}
+                  interval={0}
+                  height={38}
+                />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 11, fill: theme.palette.primary.main }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11, fill: TOTAL_COLOR }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <RechartsTooltip
+                  content={(props) => (
+                    <DrilldownTooltip {...props} theme={theme} />
+                  )}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="value"
+                  name="Value"
+                  stroke={theme.palette.primary.main}
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: theme.palette.primary.main,
+                    strokeWidth: 0,
+                  }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="cumulative"
+                  name="Running total"
+                  stroke={TOTAL_COLOR}
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: TOTAL_COLOR, strokeWidth: 0 }}
+                  isAnimationActive={false}
+                />
+              </RechartsLineChart>
+            ) : (
+              <ComposedChart
+                data={drilldownRows}
+                margin={{ top: 20, right: 16, left: -4, bottom: 6 }}
+                barCategoryGap="32%"
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke={gridStrokeColor}
+                  strokeDasharray="3 5"
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                  axisLine={{ stroke: gridStrokeColor }}
+                  tickLine={false}
+                  interval={0}
+                  height={38}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                />
+                <RechartsTooltip
+                  cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+                  content={(props) => (
+                    <DrilldownTooltip {...props} theme={theme} />
+                  )}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                  {drilldownRows.map((d) => (
+                    <Cell key={d.name} fill={d.__color} />
+                  ))}
+                </Bar>
+              </ComposedChart>
+            )
+          ) : chartType === "line" ? (
+            <RechartsLineChart
+              data={overviewRows}
+              margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={30}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+              <RechartsTooltip
+                content={(props) => (
+                  <OverviewTooltip {...props} theme={theme} />
+                )}
+              />
+              {section.products.map((p) => (
+                <Line
+                  key={p.name}
+                  yAxisId={axisGroupFor(p.name)}
+                  type="monotone"
+                  dataKey={p.name}
+                  stroke={colorForProduct(p.name)}
+                  strokeWidth={2}
+                  dot={(dotProps) => (
+                    <ClickableDot
+                      key={dotProps.payload.__isoDate}
+                      {...dotProps}
+                      fill={colorForProduct(p.name)}
+                      radius={3}
+                      onDotClick={handleDrillInto}
+                    />
+                  )}
+                  activeDot={(dotProps) => (
+                    <ClickableDot
+                      key={`active-${dotProps.payload.__isoDate}`}
+                      {...dotProps}
+                      fill={colorForProduct(p.name)}
+                      radius={5}
+                      onDotClick={handleDrillInto}
+                    />
+                  )}
+                  isAnimationActive={false}
+                />
+              ))}
+            </RechartsLineChart>
+          ) : (
+            <ComposedChart
+              data={overviewRows}
+              margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+              barCategoryGap="20%"
+              barGap={2}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={30}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: TOTAL_COLOR }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+              <RechartsTooltip
+                cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+                content={(props) => (
+                  <OverviewTooltip {...props} theme={theme} />
+                )}
+              />
+              {section.products.map((p) => (
+                <Bar
+                  key={p.name}
+                  yAxisId="left"
+                  dataKey={p.name}
+                  fill={colorForProduct(p.name)}
+                  radius={[3, 3, 0, 0]}
+                  maxBarSize={18}
+                  cursor="pointer"
+                  onClick={(data) => handleDrillInto(data.__isoDate)}
+                />
+              ))}
+              <Area
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                name="Total"
+                fill={TOTAL_COLOR}
+                fillOpacity={0.12}
+                stroke="none"
+                isAnimationActive={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                name="Total"
+                stroke={TOTAL_COLOR}
+                strokeWidth={2}
+                dot={(dotProps) => (
+                  <ClickableDot
+                    key={`total-${dotProps.payload.__isoDate}`}
+                    {...dotProps}
+                    fill={TOTAL_COLOR}
+                    radius={3}
+                    onDotClick={handleDrillInto}
+                  />
+                )}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </Box>
+
+      <Box
+        sx={{
+          mt: 1.5,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+          rowGap: 0.75,
+          columnGap: 1.5,
+        }}
+      >
+        {section.products.map((p) => (
+          <Stack
+            key={p.name}
+            direction="row"
+            spacing={0.75}
+            alignItems="center"
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "2px",
+                bgcolor: colorForProduct(p.name),
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
+              noWrap
+            >
+              {p.name}
+            </Typography>
+          </Stack>
+        ))}
+        {!isDrilldown && chartType === "bar" && (
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "2px",
+                bgcolor: TOTAL_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
+              noWrap
+            >
+              Total (right axis)
+            </Typography>
+          </Stack>
+        )}
+      </Box>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
 /* ---------------------------------------------------------------------- */
 /*  DepositsLoansDashboard.jsx — root component                            */
 /*  Purely presentational/compositional. Every number on screen comes      */
-/*  from the `data` prop, every drill-down from `fetchDrilldown`. Nothing  */
-/*  is imported or hardcoded here — see DashboardPage.jsx for how the real */
-/*  API's response gets mapped into this shape (mapApiToDashboardData.js). */
+/*  from the `data` prop. Nothing is imported or hardcoded here for the    */
+/*  treemaps/gauge — see DashboardPage.jsx for how the real API's          */
+/*  response gets mapped into this shape (mapApiToDashboardData.js).       */
 /*                                                                          */
 /*  Loans section restored — the API now returns a `loans` object. Its     */
 /*  single item list drives both the composition treemap and the          */
 /*  breakdown bar panel below, the same way Deposits does with two         */
 /*  separate demand/time lists.                                           */
+/*                                                                          */
+/*  DEMAND/TIME DEPOSITS + LOAN DISTRIBUTION — these three now render      */
+/*  through DateWiseBarPanel (multi-date, drill-downable, bar/biaxial-     */
+/*  line toggle), driven by the local bankingData.json mock rather than    */
+/*  `data.demandDeposits`/`termDeposits`/`loansBreakdown` from the real    */
+/*  API — that API doesn't return multi-date data yet. Swap the import     */
+/*  below for a real fetch once it does; DateWiseBarPanel itself doesn't   */
+/*  care where its `section` prop comes from. The rest of this file's      */
+/*  layout is unchanged from before — only these three panels' component   */
+/*  and props changed.                                                    */
 /* ---------------------------------------------------------------------- */
 
 import React, { useState } from "react";
@@ -925,10 +1769,19 @@ import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded
 import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
-import { SectionHeader, textPrimarySx, textSecondarySx } from "./common";
+import { textPrimarySx, textSecondarySx } from "./common";
 import HeatTree from "./HeatTree";
 import Gauge from "./Gauge";
-import BarPanel from "./BarPanel";
+import DateWiseBarPanel from "./DateWiseBarPanel";
+import bankingDataMock from "./bankingData.json";
+
+/** Looks up one section from the mock array by its `key` — swap this for
+ * a real fetch result when a multi-date endpoint exists; DateWiseBarPanel
+ * only cares about the { title, products, data } shape, not where it
+ * came from. */
+function bankingSection(key) {
+  return bankingDataMock.find((s) => s.key === key);
+}
 
 /** Page title/subtitle. Only used once, kept inline rather than as its
  * own file. */
@@ -972,17 +1825,12 @@ function DashboardHeader({ config }) {
  *        legend: { name }[],
  *        filterOptions?: string[], activeFilter?: string,
  *      },
- *      demandDeposits: { title, topValue, data: { name, value }[] },
- *      termDeposits:   { title, topValue, data: { name, value }[] },
  *      loansComposition: { title, subtitle, items, legend, filterOptions?, activeFilter? },
- *      loansBreakdown:   { title, topValue, data: { name, value }[] },
  *    }
- *  - fetchDrilldown: optional (categoryName: string) => Promise<{title, subtitle, data} | null>
- *    Passed straight through to every BarPanel. Omit it to make every bar
- *    chart purely display-only (no drill-down) — there's currently no
- *    drill-down endpoint, so callers should omit this for now.
+ *    (demandDeposits/termDeposits/loansBreakdown are no longer read from
+ *    `data` — see the file header note above.)
  */
-export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
+export default function DepositsLoansDashboard({ data }) {
   const [selectedPanel, setSelectedPanel] = useState(null);
 
   if (!data) return null;
@@ -1035,11 +1883,9 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
           gap: 2.5,
         }}
       >
-        <BarPanel
+        <DateWiseBarPanel
           icon={TrendingUpRoundedIcon}
-          config={data.loansBreakdown}
-          titleOverride="Loan Distribution"
-          fetchDrilldown={fetchDrilldown}
+          section={bankingSection("loansBreakdown")}
           panelId="loan-distribution-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
@@ -1059,18 +1905,16 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
           gap: 2.5,
         }}
       >
-        <BarPanel
+        <DateWiseBarPanel
           icon={DescriptionRoundedIcon}
-          config={data.demandDeposits}
-          fetchDrilldown={fetchDrilldown}
+          section={bankingSection("demandDeposits")}
           panelId="demand-deposits-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
         />
-        <BarPanel
+        <DateWiseBarPanel
           icon={DescriptionRoundedIcon}
-          config={data.termDeposits}
-          fetchDrilldown={fetchDrilldown}
+          section={bankingSection("timeDeposits")}
           panelId="term-deposits-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
@@ -1079,10 +1923,6 @@ export default function DepositsLoansDashboard({ data, fetchDrilldown }) {
     </Box>
   );
 }
-
-
-
-
 
 
 
@@ -1321,8 +2161,6 @@ export default function Gauge({
     </GlassPanel>
   );
 }
-
-
 
 
 
@@ -1690,7 +2528,7 @@ function mapItems(rawItems) {
     .filter((it) => it && typeof it === "object")
     .map((it) => ({
       name: normalizeDepositName(it.name),
-      type: String(it.type || "").trim(),
+      type: String(it.type || "").replace(/\s+/g, " ").trim(),
       value: toSafeAmount(it.value),
     }));
 }
@@ -1717,15 +2555,16 @@ function topValueOf(items) {
  * don't each repeat the same handful of lines. */
 function buildSection(raw) {
   const items = withShare(mapItems(raw?.data));
+  const filterOptions = Array.isArray(raw?.filterOptions)
+    ? raw.filterOptions
+        .filter((o) => typeof o === "string")
+        .map((o) => o.replace(/\s+/g, " ").trim())
+    : undefined;
   return {
     title: typeof raw?.title === "string" ? raw.title : "",
     subtitle: typeof raw?.subtitle === "string" ? raw.subtitle : undefined,
-    filterOptions: Array.isArray(raw?.filterOptions)
-      ? raw.filterOptions.filter((o) => typeof o === "string")
-      : undefined,
-    activeFilter: Array.isArray(raw?.filterOptions)
-      ? raw.filterOptions[0]
-      : undefined,
+    filterOptions,
+    activeFilter: filterOptions?.[0],
     items,
     legend: items.map((it) => ({ name: it.name })),
     topValue: topValueOf(items),
@@ -1867,7 +2706,6 @@ export default function mapApiToDashboardData(section) {
 
 
 
-
 /* ---------------------------------------------------------------------- */
 /*  utils.js — pure logic only, no React, no data                          */
 /*  Two independent things live here on purpose: color math and treemap    */
@@ -1885,14 +2723,14 @@ export default function mapApiToDashboardData(section) {
  * tried first but collides for some category names). */
 
 export const FIXED_DEPOSIT_COLORS = {
-  "Term Deposit": "#0c2340",
-  "Saving Bank A/c": "#1e3a5f",
+  "Term Deposit": "#165aadbd",
+  "Saving Bank A/c": "#5c0da7d5",
   "Current A/c": "#3b82f6",
-  "Cash Credit Cr Balance": "#2d8a9e",
-  "Special Term Deposit": "#0ea5e9",
+  "Cash Credit Cr Balance": "#188072",
+  "Special Term Deposit": "#8124a7",
   "Other Demand Deposit": "#06b6d4",
-  "Other Term Deposit": "#5cbdb9",
-  "Certificate of Deposit": "#7dd3fc",
+  "Other Term Deposit": "#099691",
+  "Certificate of Deposit": "#14a9ee",
 };
 
 export function hexToRgb(hex) {
@@ -1916,7 +2754,7 @@ export function mixHex(hexA, hexB, t) {
 
 /** Continuous color between `lightHex` (lowest value in the set) and
  * `darkHex` (highest value) — the heatmap gradient used by treemap tiles. */
-export function heatColor(value, min, max, darkHex, lightHex) {
+export function heatColor(value, min, max, darkHex, lightHex) { 
   const t = max === min ? 1 : (value - min) / (max - min);
   return mixHex(lightHex, darkHex, t);
 }
