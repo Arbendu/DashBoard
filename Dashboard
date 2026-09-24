@@ -1,66 +1,3 @@
-// BankingData.json
-
-[
-  {
-    "key": "demandDeposits",
-    "title": "Demand Deposits",
-    "products": [
-      { "name": "Saving Bank A/c", "type": "Demand Deposit" },
-      { "name": "Current A/c", "type": "Demand Deposit" },
-      { "name": "Cash Credit Cr Balance", "type": "Demand Deposit" },
-      { "name": "Other Demand Deposit", "type": "Demand Deposit" }
-    ],
-    "data": [
-      { "date": "2026-09-14", "values": [44.0, 11.5, 76.5, 32.0] },
-      { "date": "2026-09-15", "values": [65.5, 32.2, 57.8, 30.5] },
-      { "date": "2026-09-16", "values": [14.8, 9.8, 87.2, 12.8] },
-      { "date": "2026-09-17", "values": [55.2, 10.1, 38.4, 53.2] },
-      { "date": "2026-09-18", "values": [85.0, 22.0, 58.0, 23.0] }
-    ]
-  },
-  {
-    "key": "timeDeposits",
-    "title": "Time Deposits",
-    "products": [
-      { "name": "Certificate of Deposit", "type": "Time Deposit" },
-      { "name": "Other Term Deposit", "type": "Time Deposit" },
-      { "name": "Special Term Deposit", "type": "Time Deposit" },
-      { "name": "Term Deposit", "type": "Time Deposit" }
-    ],
-    "data": [
-      { "date": "2026-09-14", "values": [63.0, 26.5, 79.5, 55.0] },
-      { "date": "2026-09-15", "values": [50.5, 47.3, 40.8, 36.4] },
-      { "date": "2026-09-16", "values": [20.8, 36.8, 70.2, 45.7] },
-      { "date": "2026-09-17", "values": [84.2, 67.1, 81.3, 26.2] },
-      { "date": "2026-09-18", "values": [34.0, 27.0, 51.0, 66.0] }
-    ]
-  },
-  {
-    "key": "loansBreakdown",
-    "title": "Loan Distribution",
-    "products": [
-      { "name": "Term Loan Account", "type": "Loan" },
-      { "name": "Agri Cash Credit", "type": "Loan" },
-      { "name": "Cash Credit", "type": "Loan" },
-      { "name": "Demand Loan", "type": "Loan" },
-      { "name": "Overdraft", "type": "Loan" },
-      { "name": "Bills Payable", "type": "Loan" }
-    ],
-    "data": [
-      { "date": "2026-09-14", "values": [27.5, 54.0, 40.5, 40.5, 72.0, 18.5] },
-      { "date": "2026-09-15", "values": [48.3, 85.5, 21.4, 81.8, 43.5, 39.3] },
-      { "date": "2026-09-16", "values": [17.8, 34.8, 25.8, 61.2, 82.8, 28.8] },
-      { "date": "2026-09-17", "values": [68.1, 55.2, 61.2, 52.4, 53.3, 59.1] },
-      { "date": "2026-09-18", "values": [38.0, 45.0, 31.0, 82.0, 63.0, 39.0] }
-    ]
-  }
-]
-
-
-
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  BarChart.jsx                                                           */
 /*  REUSABLE: the ONE place the Recharts bar-chart markup lives. Every     */
@@ -276,7 +213,6 @@ export default function BarChart({ data, onBarClick }) {
 
 
 
-
 /* ---------------------------------------------------------------------- */
 /*  BarPanel.jsx                                                           */
 /*  REUSABLE: one panel type, used for every bar-chart section in the      */
@@ -467,7 +403,6 @@ export default function BarPanel({
     </GlassPanel>
   );
 }
-
 
 
 
@@ -674,8 +609,6 @@ export default function BiaxialLineChart({ data }) {
     </Box>
   );
 }
-
-
 
 
 
@@ -935,16 +868,26 @@ export function BackButton({ onBack }) {
 
 
 
+
 /* ---------------------------------------------------------------------- */
 /*  DashboardPage.jsx — main entry point / the ONE place the real API      */
 /*  gets wired in.                                                        */
-/*  Uses the project's existing `useApi` hook to fetch the dashboard data  */
-/*  once on mount, maps the raw response into the shape                    */
-/*  <DepositsLoansDashboard /> expects (mapApiToDashboardData.js), and     */
-/*  handles loading / error / empty states. No component under             */
-/*  DepositsLoansDashboard knows an API exists — this is the only file     */
-/*  that needs to change if the endpoint, auth, or response shape changes. */
-/*  Mount this file directly as your route/page component.                */
+/*  Uses the project's existing `useApi` hook to fetch TWO independent      */
+/*  endpoints once on mount:                                              */
+/*   - /DS/dashboard/dashboard-data — the static snapshot (heatmap tiles,   */
+/*     CASA ratio), mapped by mapApiToDashboardData.js.                    */
+/*   - /DS/dashboard/trend-data — the 7-day date-wise data behind the       */
+/*     Demand/Time Deposits and Loan Distribution panels, mapped by         */
+/*     trendApi.js's mapTrendDataToSections().                            */
+/*  Each fetch has its own independent loading/error state (two separate   */
+/*  useApi() instances — sharing one would mix up their results), but the  */
+/*  page waits for BOTH before rendering the dashboard, and surfaces        */
+/*  either one's error the same way — this keeps the existing loading/     */
+/*  error UI and overall page behavior unchanged, just gated on two        */
+/*  fetches instead of one.                                               */
+/*  No component under DepositsLoansDashboard knows an API exists — this   */
+/*  is the only file that needs to change if either endpoint, auth, or      */
+/*  response shape changes. Mount this file directly as your route/page.   */
 /* ---------------------------------------------------------------------- */
 
 import React, { useEffect, useMemo } from "react";
@@ -952,17 +895,30 @@ import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import useApi from "../../hooks/useApi"; // adjust path to match your project structure
 import DepositsLoansDashboard from "./DepositsLoansDashboard";
 import mapApiToDashboardData from "./MapApiToDashboardData";
+import { mapTrendDataToSections, TREND_DATA_ENDPOINT } from "./trendApi";
 import { textSecondarySx } from "./common";
 
 const DASHBOARD_ENDPOINT = "/DS/dashboard/dashboard-data";
 
 export default function DashboardPage() {
   const { data: apiResponse, error, loading, callApi } = useApi();
+  const {
+    data: trendResponse,
+    error: trendError,
+    loading: trendLoading,
+    callApi: callTrendApi,
+  } = useApi();
 
   useEffect(() => {
+    // Both fetches fire in parallel — neither waits on the other, since
+    // they're two independent endpoints feeding two independent parts of
+    // the page.
     callApi(DASHBOARD_ENDPOINT).catch(() => {
       // Swallow here — `error` from useApi already captures it below, and
       // callApi's own catch already logs the underlying error.
+    });
+    callTrendApi(TREND_DATA_ENDPOINT).catch(() => {
+      // Same as above, for the trend fetch.
     });
     // Only fetch once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -973,28 +929,68 @@ export default function DashboardPage() {
   // the shape translation + derived calculations (share %, topValue, ...).
   const dashboardData = useMemo(() => {
     const section = apiResponse?.data?.staticDashboardData?.[0];
-    console.log("Dashboard response: ", section);
-    
     return mapApiToDashboardData(section);
   }, [apiResponse]);
 
-  if (loading && !dashboardData) {
+  // trend-data's envelope is simpler: response.data is directly the array
+  // of { key, title, products, data } sections.
+  const trendSections = useMemo(
+    () => mapTrendDataToSections(trendResponse?.data),
+    [trendResponse],
+  );
+
+  const isLoading = (loading || trendLoading) && !dashboardData;
+  const hasError = error || trendError;
+
+  if (isLoading) {
     return (
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
+          gap: 2,
+        }}
+      >
         <CircularProgress />
         <Typography sx={textSecondarySx}>Loading dashboard…</Typography>
       </Box>
     );
   }
 
-  if (error) {
+  if (hasError) {
+    const failedMessage =
+      error?.response?.data?.message ||
+      error?.message ||
+      trendError?.response?.data?.message ||
+      trendError?.message ||
+      "Something went wrong while fetching data.";
     return (
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 2, textAlign: "center", px: 3 }}>
-        <Typography sx={{ fontWeight: 700 }}>Couldn't load the dashboard</Typography>
-        <Typography sx={textSecondarySx}>
-          {error?.response?.data?.message || error?.message || "Something went wrong while fetching data."}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
+          gap: 2,
+          textAlign: "center",
+          px: 3,
+        }}
+      >
+        <Typography sx={{ fontWeight: 700 }}>
+          Couldn't load the dashboard
         </Typography>
-        <Button variant="contained" onClick={() => callApi(DASHBOARD_ENDPOINT)}>
+        <Typography sx={textSecondarySx}>{failedMessage}</Typography>
+        <Button
+          variant="contained"
+          onClick={() => {
+            callApi(DASHBOARD_ENDPOINT);
+            callTrendApi(TREND_DATA_ENDPOINT);
+          }}
+        >
           Retry
         </Button>
       </Box>
@@ -1003,17 +999,30 @@ export default function DashboardPage() {
 
   if (!dashboardData) {
     return (
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
-        <Typography sx={textSecondarySx}>No dashboard data available.</Typography>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "60vh",
+        }}
+      >
+        <Typography sx={textSecondarySx}>
+          No dashboard data available.
+        </Typography>
       </Box>
     );
   }
 
   // No `fetchDrilldown` passed — there's currently no drill-down endpoint,
   // so every bar renders display-only until one exists (see BarPanel.jsx).
-  return <DepositsLoansDashboard data={dashboardData} />;
+  return (
+    <DepositsLoansDashboard
+      data={dashboardData}
+      trendSections={trendSections}
+    />
+  );
 }
-
 
 
 
@@ -1100,7 +1109,8 @@ import {
 } from "./common";
 import { getColor, formatAmount } from "./utils";
 
-const TOTAL_COLOR = "#eb6834"; // the date-wise Total's fixed accent color, in the bar/composed view only
+const TOTAL_COLOR = "#E3B831"; // the date-wise Total's fixed accent color, in the bar/composed view only
+const DATA_COLOR = "#4f16aa";
 
 /** "2026-09-17" -> "17-Sep", matching the reference screenshot's axis
  * label style. Falls back to the raw string if it doesn't parse (never
@@ -1296,6 +1306,16 @@ export default function DateWiseBarPanel({
   const [chartType, setChartType] = useState("bar"); // "bar" | "line" — applies to whichever view is active
   const [selectedDate, setSelectedDate] = useState(null); // null = overview, else the drilled-into date
 
+  // Defensive fallback — with real network data, `section` can briefly be
+  // undefined (still loading, or this key wasn't in the response) instead
+  // of always synchronously present like the old bankingData.json mock
+  // was. Every hook below still needs to run every render (Rules of
+  // Hooks), so it runs against this safe empty shape; the actual "no
+  // data" message is rendered further down, after all hooks have run.
+  const safeTitle = section?.title || "";
+  const products = Array.isArray(section?.products) ? section.products : [];
+  const dataRows = Array.isArray(section?.data) ? section.data : [];
+
   const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
 
   // One consistent color per PRODUCT (category), by its fixed position in
@@ -1303,10 +1323,10 @@ export default function DateWiseBarPanel({
   // color never shifts between the overview and a drill-down.
   const colorForProduct = useMemo(() => {
     const map = new Map(
-      section.products.map((p, i) => [p.name, getColor(p.name, i, theme)]),
+      products.map((p, i) => [p.name, getColor(p.name, i, theme)]),
     );
     return (name) => map.get(name) || getColor(name, 0, theme);
-  }, [section.products, theme]);
+  }, [products, theme]);
 
   // NEW: splits categories into a "left axis" and "right axis" group by
   // magnitude (using each category's most recent value) — this is what
@@ -1314,9 +1334,9 @@ export default function DateWiseBarPanel({
   // for lines looking flat: one shared axis scaled to the largest
   // category flattens a smaller category's real day-to-day movement.
   const axisGroupFor = useMemo(() => {
-    const latest = section.products.map((p, i) => ({
+    const latest = products.map((p, i) => ({
       name: p.name,
-      value: section.data[section.data.length - 1]?.values[i] ?? 0,
+      value: dataRows[dataRows.length - 1]?.values[i] ?? 0,
     }));
     const sorted = [...latest].sort((a, b) => a.value - b.value);
     const mid = Math.ceil(sorted.length / 2);
@@ -1324,7 +1344,7 @@ export default function DateWiseBarPanel({
       sorted.map((item, idx) => [item.name, idx < mid ? "left" : "right"]),
     );
     return (name) => map.get(name) || "left";
-  }, [section.products, section.data]);
+  }, [products, dataRows]);
 
   // Overview rows: one object per date, with each product's value keyed
   // by its own name — the shape Recharts' multi-series Bar/Line chart
@@ -1332,15 +1352,15 @@ export default function DateWiseBarPanel({
   // products) for the composed bar view's right axis.
   const overviewRows = useMemo(
     () =>
-      section.data.map((row) => {
+      dataRows.map((row) => {
         const entry = { date: formatDateLabel(row.date), __isoDate: row.date };
-        section.products.forEach((p, i) => {
+        products.forEach((p, i) => {
           entry[p.name] = row.values[i];
         });
         entry.Total = row.values.reduce((sum, v) => sum + v, 0);
         return entry;
       }),
-    [section.data, section.products],
+    [dataRows, products],
   );
 
   // Drill-down rows: the single selected date's products, reshaped into
@@ -1350,10 +1370,10 @@ export default function DateWiseBarPanel({
   // right axis.
   const drilldownRows = useMemo(() => {
     if (!selectedDate) return [];
-    const row = section.data.find((d) => d.date === selectedDate);
+    const row = dataRows.find((d) => d.date === selectedDate);
     if (!row) return [];
     let running = 0;
-    return section.products.map((p, i) => {
+    return products.map((p, i) => {
       running += row.values[i];
       return {
         name: p.name,
@@ -1362,7 +1382,7 @@ export default function DateWiseBarPanel({
         __color: colorForProduct(p.name),
       };
     });
-  }, [selectedDate, section.data, section.products, colorForProduct]);
+  }, [selectedDate, dataRows, products, colorForProduct]);
 
   const handleDrillInto = (isoDate) => {
     setSelectedDate(isoDate);
@@ -1377,6 +1397,26 @@ export default function DateWiseBarPanel({
   const isDrilldown = Boolean(selectedDate);
   const drilldownLabel = isDrilldown ? formatDateLabel(selectedDate) : null;
 
+  // No section for this key yet (still loading, or missing from the
+  // response) — show a lightweight placeholder instead of crashing on
+  // products/data that don't exist. Same GlassPanel/PanelHeader shell and
+  // text style as the rest of the dashboard, so it doesn't look like a
+  // different kind of thing.
+  if (!section) {
+    return (
+      <GlassPanel
+        sx={{ p: 3 }}
+        selected={selectedPanel === panelId}
+        onClick={() => onSelectPanel?.(panelId)}
+      >
+        <PanelHeader icon={icon} title={safeTitle || "—"} />
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>
+          No data available.
+        </Typography>
+      </GlassPanel>
+    );
+  }
+
   return (
     <GlassPanel
       sx={{ p: 3 }}
@@ -1385,9 +1425,7 @@ export default function DateWiseBarPanel({
     >
       <PanelHeader
         icon={icon}
-        title={
-          isDrilldown ? `${section.title} — ${drilldownLabel}` : section.title
-        }
+        title={isDrilldown ? `${safeTitle} — ${drilldownLabel}` : safeTitle}
         action={
           <Stack direction="row" spacing={0.5} alignItems="center">
             {isDrilldown && <BackButton onBack={handleBack} />}
@@ -1469,16 +1507,6 @@ export default function DateWiseBarPanel({
                   }}
                   isAnimationActive={false}
                 />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="cumulative"
-                  name="Running total"
-                  stroke={TOTAL_COLOR}
-                  strokeWidth={2}
-                  dot={{ r: 3, fill: TOTAL_COLOR, strokeWidth: 0 }}
-                  isAnimationActive={false}
-                />
               </RechartsLineChart>
             ) : (
               <ComposedChart
@@ -1556,7 +1584,7 @@ export default function DateWiseBarPanel({
                   <OverviewTooltip {...props} theme={theme} />
                 )}
               />
-              {section.products.map((p) => (
+              {products.map((p) => (
                 <Line
                   key={p.name}
                   yAxisId={axisGroupFor(p.name)}
@@ -1616,7 +1644,7 @@ export default function DateWiseBarPanel({
               <YAxis
                 yAxisId="right"
                 orientation="right"
-                tick={{ fontSize: 11, fill: TOTAL_COLOR }}
+                tick={{ fontSize: 11, fill: DATA_COLOR }}
                 axisLine={false}
                 tickLine={false}
                 width={36}
@@ -1627,7 +1655,7 @@ export default function DateWiseBarPanel({
                   <OverviewTooltip {...props} theme={theme} />
                 )}
               />
-              {section.products.map((p) => (
+              {products.map((p) => (
                 <Bar
                   key={p.name}
                   yAxisId="left"
@@ -1681,7 +1709,7 @@ export default function DateWiseBarPanel({
           columnGap: 1.5,
         }}
       >
-        {section.products.map((p) => (
+        {products.map((p) => (
           <Stack
             key={p.name}
             direction="row"
@@ -1739,7 +1767,6 @@ export default function DateWiseBarPanel({
 
 
 
-
 /* ---------------------------------------------------------------------- */
 /*  DepositsLoansDashboard.jsx — root component                            */
 /*  Purely presentational/compositional. Every number on screen comes      */
@@ -1752,15 +1779,15 @@ export default function DateWiseBarPanel({
 /*  breakdown bar panel below, the same way Deposits does with two         */
 /*  separate demand/time lists.                                           */
 /*                                                                          */
-/*  DEMAND/TIME DEPOSITS + LOAN DISTRIBUTION — these three now render      */
-/*  through DateWiseBarPanel (multi-date, drill-downable, bar/biaxial-     */
-/*  line toggle), driven by the local bankingData.json mock rather than    */
-/*  `data.demandDeposits`/`termDeposits`/`loansBreakdown` from the real    */
-/*  API — that API doesn't return multi-date data yet. Swap the import     */
-/*  below for a real fetch once it does; DateWiseBarPanel itself doesn't   */
-/*  care where its `section` prop comes from. The rest of this file's      */
-/*  layout is unchanged from before — only these three panels' component   */
-/*  and props changed.                                                    */
+/*  DEMAND/TIME DEPOSITS + LOAN DISTRIBUTION — these three render through   */
+/*  DateWiseBarPanel (multi-date, drill-downable, bar/biaxial-line          */
+/*  toggle). Their data now comes from the `trendSections` prop — the      */
+/*  real /DS/dashboard/trend-data response, mapped by trendApi.js — no      */
+/*  longer the local bankingData.json mock. DateWiseBarPanel itself         */
+/*  doesn't care where `section` comes from, so nothing about how it's      */
+/*  called below changed, only where the array it's looked up from         */
+/*  comes from. The rest of this file (layout, colors, icons) is           */
+/*  unchanged.                                                            */
 /* ---------------------------------------------------------------------- */
 
 import React, { useState } from "react";
@@ -1773,15 +1800,6 @@ import { textPrimarySx, textSecondarySx } from "./common";
 import HeatTree from "./HeatTree";
 import Gauge from "./Gauge";
 import DateWiseBarPanel from "./DateWiseBarPanel";
-import bankingDataMock from "./bankingData.json";
-
-/** Looks up one section from the mock array by its `key` — swap this for
- * a real fetch result when a multi-date endpoint exists; DateWiseBarPanel
- * only cares about the { title, products, data } shape, not where it
- * came from. */
-function bankingSection(key) {
-  return bankingDataMock.find((s) => s.key === key);
-}
 
 /** Page title/subtitle. Only used once, kept inline rather than as its
  * own file. */
@@ -1814,6 +1832,13 @@ function DashboardHeader({ config }) {
   );
 }
 
+/** Looks up one trend section by its `key` from the trendSections prop —
+ * same lookup pattern as before, just reading from a prop (the real API
+ * response) instead of an imported mock file. */
+function trendSection(trendSections, key) {
+  return trendSections?.find((s) => s.key === key);
+}
+
 /**
  * Props:
  *  - data: {
@@ -1827,10 +1852,13 @@ function DashboardHeader({ config }) {
  *      },
  *      loansComposition: { title, subtitle, items, legend, filterOptions?, activeFilter? },
  *    }
- *    (demandDeposits/termDeposits/loansBreakdown are no longer read from
- *    `data` — see the file header note above.)
+ *    (demandDeposits/termDeposits/loansBreakdown are not read from `data`
+ *    — see `trendSections` below.)
+ *  - trendSections: { key, title, products, data }[] — from
+ *    /DS/dashboard/trend-data via trendApi.js's mapTrendDataToSections().
+ *    Looked up by `key` for each of the three DateWiseBarPanel calls below.
  */
-export default function DepositsLoansDashboard({ data }) {
+export default function DepositsLoansDashboard({ data, trendSections }) {
   const [selectedPanel, setSelectedPanel] = useState(null);
 
   if (!data) return null;
@@ -1885,7 +1913,7 @@ export default function DepositsLoansDashboard({ data }) {
       >
         <DateWiseBarPanel
           icon={TrendingUpRoundedIcon}
-          section={bankingSection("loansBreakdown")}
+          section={trendSection(trendSections, "loansBreakdown")}
           panelId="loan-distribution-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
@@ -1907,14 +1935,14 @@ export default function DepositsLoansDashboard({ data }) {
       >
         <DateWiseBarPanel
           icon={DescriptionRoundedIcon}
-          section={bankingSection("demandDeposits")}
+          section={trendSection(trendSections, "demandDeposits")}
           panelId="demand-deposits-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
         />
         <DateWiseBarPanel
           icon={DescriptionRoundedIcon}
-          section={bankingSection("timeDeposits")}
+          section={trendSection(trendSections, "timeDeposits")}
           panelId="term-deposits-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
@@ -2161,7 +2189,6 @@ export default function Gauge({
     </GlassPanel>
   );
 }
-
 
 
 
@@ -2484,9 +2511,6 @@ export default function HeatTree({
 
 
 
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  mapApiToDashboardData.js                                               */
 /*  Translates ONE `staticDashboardData[i]` section from the real API      */
@@ -2706,6 +2730,102 @@ export default function mapApiToDashboardData(section) {
 
 
 
+
+
+/* ---------------------------------------------------------------------- */
+/*  trendApi.js                                                            */
+/*  Everything related to the GET /DS/dashboard/trend-data endpoint lives  */
+/*  here — the endpoint path, and mapTrendDataToSections(), which turns    */
+/*  the raw API response into the exact { key, title, products, data }[]  */
+/*  shape DateWiseBarPanel already consumes (matches bankingData.json's    */
+/*  shape exactly, so DateWiseBarPanel itself needs no changes).           */
+/*                                                                          */
+/*  SECURITY / ROBUSTNESS — same reasoning as mapApiToDashboardData.js:    */
+/*  this is the one place this endpoint's raw, untrusted response gets     */
+/*  validated before anything else sees it. Every field is type-checked    */
+/*  and range-clamped so a malformed response can never crash the          */
+/*  dashboard — a bad section is dropped rather than throwing.            */
+/* ---------------------------------------------------------------------- */
+
+import { normalizeDepositName } from "./utils";
+
+export const TREND_DATA_ENDPOINT = "/DS/dashboard/trend-data";
+
+/** Coerces `raw` into a finite, non-negative number, or 0 if it can't be
+ * trusted (missing, wrong type, NaN, negative). Deposit/loan amounts are
+ * never legitimately negative, and a stray negative/NaN would otherwise
+ * corrupt everything downstream — date-wise totals, axis scaling, the
+ * sqrt-based sizing elsewhere in the dashboard. */
+function toSafeAmount(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function mapProducts(rawProducts) {
+  if (!Array.isArray(rawProducts)) return [];
+  return rawProducts
+    .filter((p) => p && typeof p === "object")
+    .map((p) => ({
+      name: normalizeDepositName(p.name),
+      type: String(p.type || "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    }));
+}
+
+/** Every data row's `values` array must line up 1:1 with `products` —
+ * pads a short row with 0s and drops extra entries from a long one,
+ * rather than trusting the API to always send a matching length. */
+function mapDataRows(rawData, expectedLength) {
+  if (!Array.isArray(rawData)) return [];
+  return rawData
+    .filter(
+      (row) => row && typeof row === "object" && typeof row.date === "string",
+    )
+    .map((row) => {
+      const rawValues = Array.isArray(row.values) ? row.values : [];
+      const values = Array.from({ length: expectedLength }, (_, i) =>
+        toSafeAmount(rawValues[i]),
+      );
+      return { date: row.date, values };
+    });
+}
+
+/** One section: { key, title, products, data } — exactly matching what
+ * DateWiseBarPanel/bankingData.json already use. */
+function mapSection(rawSection) {
+  if (!rawSection || typeof rawSection !== "object") return null;
+  const products = mapProducts(rawSection.products);
+  return {
+    key: typeof rawSection.key === "string" ? rawSection.key : "",
+    title: typeof rawSection.title === "string" ? rawSection.title : "",
+    products,
+    data: mapDataRows(rawSection.data, products.length),
+  };
+}
+
+/**
+ * @param {unknown} rawResponseData — the raw `response.data` array from
+ *   GET /DS/dashboard/trend-data (an array of sections).
+ * @returns { key, title, products, data }[] — same shape as
+ *   bankingData.json, safe to pass straight into DateWiseBarPanel. Never
+ *   throws; a malformed section is simply dropped rather than crashing
+ *   the whole page.
+ */
+export function mapTrendDataToSections(rawResponseData) {
+  if (!Array.isArray(rawResponseData)) return [];
+  return rawResponseData.map(mapSection).filter(Boolean);
+}
+
+
+
+
+
+
+
+
+
+
 /* ---------------------------------------------------------------------- */
 /*  utils.js — pure logic only, no React, no data                          */
 /*  Two independent things live here on purpose: color math and treemap    */
@@ -2723,14 +2843,14 @@ export default function mapApiToDashboardData(section) {
  * tried first but collides for some category names). */
 
 export const FIXED_DEPOSIT_COLORS = {
-  "Term Deposit": "#165aadbd",
-  "Saving Bank A/c": "#5c0da7d5",
-  "Current A/c": "#3b82f6",
-  "Cash Credit Cr Balance": "#188072",
-  "Special Term Deposit": "#8124a7",
-  "Other Demand Deposit": "#06b6d4",
-  "Other Term Deposit": "#099691",
-  "Certificate of Deposit": "#14a9ee",
+  "Term Deposit": "#5F38A7",
+  "Saving Bank A/c": "#174A92",
+  "Current A/c": "#00AEBE",
+  "Cash Credit Cr Balance": "#3FBE90",
+  "Special Term Deposit": "#00A2A4",
+  "Other Demand Deposit": "#EB881F",
+  "Other Term Deposit": "#DA5AB6",
+  "Certificate of Deposit": "#448247",
 };
 
 export function hexToRgb(hex) {
