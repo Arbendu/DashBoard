@@ -1,1 +1,1482 @@
+/* ---------------------------------------------------------------------- */
+/*  CasaTrendChart.jsx                                                     */
+/*  A view-only (no click interaction anywhere) filled area + line chart   */
+/*  for the CASA ratio's 7-day trend — matches the reference "TREND IN     */
+/*  CASA RATIO" Excel chart's look: a single smooth curve with a filled    */
+/*  area beneath it.                                                      */
+/*                                                                          */
+/*  DATA SHAPE — consumes the "casatrend" trend-data section directly:     */
+/*    { title, products: [{name, type}], data: [{date, values: [n]}] }    */
+/*  (same shape as every other trend section — one product, one value per */
+/*  date). The API sends the ratio as a plain fraction (e.g. 0.44 =       */
+/*  44%) — this multiplies by 100 before display, the same normalization  */
+/*  the CASA gauge (Gauge.jsx / mapApiToDashboardData.js) already does     */
+/*  for the static snapshot value.                                        */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo } from "react";
+import { Box, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import { Area, CartesianGrid, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+
+const LINE_COLOR = "#2a78d6";
+
+/** "2026-09-17" -> "17-Sep", matching every other trend chart's axis
+ * label style in this dashboard. */
+function formatDateLabel(isoDate) {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).replace(" ", "-");
+}
+
+/** Coerces a raw ratio into a percentage: treats a value from 0 to 1 as a
+ * fraction (multiplies by 100), a value already greater than 1 up to 100
+ * as already a percentage, and anything else as untrustworthy (null) —
+ * same reasoning as mapApiToDashboardData.js's normalizeCasaPercent for
+ * the CASA gauge. */
+function toPercent(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  if (n >= 0 && n <= 1) return n * 100;
+  if (n > 1 && n <= 100) return n;
+  return null;
+}
+
+function CasaTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const value = payload[0]?.value;
+  if (value == null) return null;
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>{label}</Typography>
+      <Typography sx={{ fontSize: 14, fontWeight: 800, color: LINE_COLOR }}>{value.toFixed(1)}%</Typography>
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - section: { title, products, data: {date, values:[number]}[] } — the
+ *    "casatrend" trend-data section (see trendApi.js).
+ *  - icon: MUI icon component for the panel header.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring for the CARD itself (shared with every other panel) — this is
+ *    separate from the chart being non-interactive; clicking the card
+ *    still highlights it like any other panel, only the chart's own data
+ *    points aren't clickable.
+ */
+export default function CasaTrendChart({ section, icon, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  const rows = useMemo(() => {
+    if (!Array.isArray(section?.data)) return [];
+    return section.data.map((row) => ({
+      date: formatDateLabel(row.date),
+      value: toPercent(row.values?.[0]),
+    }));
+  }, [section]);
+
+  const hasData = rows.length > 0 && rows.some((r) => r.value != null);
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader icon={icon} title={section?.title || "CASA Trend"} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>7-day trend, view only</Typography>
+
+      {hasData ? (
+        <Box sx={{ width: "100%", height: 220, "& svg:focus, & svg *:focus": { outline: "none" } }}>
+          <ResponsiveContainer>
+            <ComposedChart data={rows} margin={{ top: 20, right: 8, left: -4, bottom: 6 }}>
+              <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={{ stroke: gridStrokeColor }} tickLine={false} interval={0} height={30} />
+              <YAxis tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={36} unit="%" />
+              <Tooltip content={(props) => <CasaTooltip {...props} theme={theme} />} />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={LINE_COLOR}
+                strokeWidth={2.5}
+                fill={LINE_COLOR}
+                fillOpacity={0.18}
+                dot={{ r: 3, fill: LINE_COLOR, strokeWidth: 0 }}
+                isAnimationActive={false}
+                // No onClick anywhere on this series — view only, per request.
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>No data available.</Typography>
+      )}
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  TrendBubbleChart.jsx                                                   */
+/*  A view-only (no click interaction anywhere) bubble/scatter chart —      */
+/*  replaces DateWiseBarPanel for Demand Deposits and Time Deposits per    */
+/*  request, matching the reference "bubble size = magnitude" style        */
+/*  (X = date, Y = amount, bubble RADIUS also driven by amount — there's    */
+/*  no independent third metric in this data the way the reference's       */
+/*  "headcount" was, so amount doing double duty for Y position and size   */
+/*  is the closest honest mapping).                                        */
+/*                                                                          */
+/*  One <Scatter> series per category/product, each its own fixed color    */
+/*  (same getColor(name, index, theme) convention as every other chart in  */
+/*  this dashboard, so a category's color stays consistent across the      */
+/*  whole app).                                                           */
+/*                                                                          */
+/*  DATA SHAPE — consumes a trend-data section directly, same as           */
+/*  DateWiseBarPanel:                                                     */
+/*    { title, products: [{name, type}], data: [{date, values}] }         */
+/*  where `values[i]` corresponds to `products[i]`.                       */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import { CartesianGrid, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis, ResponsiveContainer } from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+import { getColor, formatAmount } from "./utils";
+
+/** "2026-09-17" -> "17-Sep", matching every other trend chart's axis
+ * label style in this dashboard. */
+function formatDateLabel(isoDate) {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).replace(" ", "-");
+}
+
+function BubbleTooltip({ active, payload, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>{point.dateLabel}</Typography>
+      <Typography sx={{ fontSize: 13, fontWeight: 800, color: point.__color }}>{point.name}</Typography>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: "text.primary" }}>{formatAmount(point.value)}</Typography>
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - section: { title, products, data: {date, values}[] } — a trend-data
+ *    section (see trendApi.js). Same shape DateWiseBarPanel consumes.
+ *  - icon: MUI icon component for the panel header.
+ *  - panelId / selectedPanel / onSelectPanel: click-to-highlight wiring
+ *    for the CARD itself, shared with every other panel — separate from
+ *    the chart's own data points, which are not clickable at all.
+ */
+export default function TrendBubbleChart({ section, icon, panelId, selectedPanel, onSelectPanel }) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  const products = Array.isArray(section?.products) ? section.products : [];
+  const dataRows = Array.isArray(section?.data) ? section.data : [];
+
+  const colorForProduct = useMemo(() => {
+    const map = new Map(products.map((p, i) => [p.name, getColor(p.name, i, theme)]));
+    return (name) => map.get(name) || getColor(name, 0, theme);
+  }, [products, theme]);
+
+  // One point array per product — Scatter series each take their own
+  // `data`, unlike Bar/Line which share one chart-level `data` array.
+  const seriesByProduct = useMemo(
+    () =>
+      products.map((p, i) => ({
+        name: p.name,
+        color: colorForProduct(p.name),
+        points: dataRows.map((row) => ({
+          date: formatDateLabel(row.date),
+          dateLabel: formatDateLabel(row.date),
+          value: row.values?.[i] ?? 0,
+          name: p.name,
+          __color: colorForProduct(p.name),
+        })),
+      })),
+    [products, dataRows, colorForProduct],
+  );
+
+  const hasData = seriesByProduct.some((s) => s.points.length > 0);
+
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader icon={icon} title={section?.title || "—"} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>7-day trend, view only</Typography>
+
+      {hasData ? (
+        <Box sx={{ width: "100%", height: 260, "& svg:focus, & svg *:focus": { outline: "none" } }}>
+          <ResponsiveContainer>
+            <ScatterChart margin={{ top: 20, right: 16, left: -4, bottom: 6 }}>
+              <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+              <XAxis dataKey="date" type="category" allowDuplicatedCategory={false} tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={{ stroke: gridStrokeColor }} tickLine={false} />
+              <YAxis dataKey="value" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={32} />
+              <ZAxis dataKey="value" range={[80, 340]} />
+              <Tooltip cursor={{ strokeDasharray: "3 3" }} content={(props) => <BubbleTooltip {...props} theme={theme} />} />
+              {seriesByProduct.map((s) => (
+                <Scatter key={s.name} name={s.name} data={s.points} fill={s.color} fillOpacity={0.75} isAnimationActive={false} />
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>No data available.</Typography>
+      )}
+
+      <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", rowGap: 0.75, columnGap: 1.5 }}>
+        {products.map((p) => (
+          <Stack key={p.name} direction="row" spacing={0.75} alignItems="center">
+            <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: colorForProduct(p.name), flexShrink: 0 }} />
+            <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }} noWrap>
+              {p.name}
+            </Typography>
+          </Stack>
+        ))}
+      </Box>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  TotalDepositsTrendPanel.jsx                                            */
+/*  Three drill-down levels, all in one panel:                             */
+/*                                                                          */
+/*  LEVEL 0 (default) — a composed chart of the "totaldeposittrend"        */
+/*  section: one bar per day for "Demand Deposit Trends" and one for       */
+/*  "Time Deposit Trends" (grouped, left axis), PLUS a LINE showing the    */
+/*  day's TOTAL (their sum) on an independent right axis. Clicking either  */
+/*  bar TYPE (not a specific day) drills into that type's full 7-day       */
+/*  breakdown — LEVEL 1.                                                  */
+/*                                                                          */
+/*  LEVEL 1 — the real "demandDeposits" or "timeDeposits" trend section's  */
+/*  full multi-category, 7-day overview. This is simply DateWiseBarPanel   */
+/*  embedded here — it already renders exactly this view (grouped bars per */
+/*  date, one per category) and already has its OWN click-to-drill-down    */
+/*  logic for a single day, so nothing about that behavior needed          */
+/*  reimplementing. A `titleOverride` labels it clearly, and              */
+/*  `onBackToParent` gives it an extra Back button (alongside its own      */
+/*  date-drilldown Back button) that returns all the way to Level 0.       */
+/*                                                                          */
+/*  LEVEL 2 — a single day's full category breakdown. This is             */
+/*  DateWiseBarPanel's OWN built-in date-drilldown (click any bar in       */
+/*  Level 1) — already exists, nothing new needed here either.            */
+/*                                                                          */
+/*  So this file only actually implements LEVEL 0; levels 1 and 2 are      */
+/*  DateWiseBarPanel reused as-is.                                        */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+import { formatAmount } from "./utils";
+import DateWiseBarPanel from "./DateWiseBarPanel";
+
+const DEMAND_COLOR = "#2a78d6";
+const TIME_COLOR = "#6250d6";
+const TOTAL_LINE_COLOR = "#eb6834";
+
+/** "2026-09-17" -> "17-Sep", matching every other trend chart's axis
+ * label style in this dashboard. */
+function formatDateLabel(isoDate) {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }).replace(" ", "-");
+}
+
+function TotalTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const seen = new Set();
+  const uniquePayload = payload.filter((p) => {
+    if (seen.has(p.dataKey)) return false;
+    seen.add(p.dataKey);
+    return true;
+  });
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary", mb: 0.5 }}>{label}</Typography>
+      {uniquePayload.map((p) => (
+        <Stack key={p.dataKey} direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.25 }}>
+          <Box sx={{ width: 7, height: 7, borderRadius: "2px", bgcolor: p.color, flexShrink: 0 }} />
+          <Typography sx={{ fontSize: 11.5, color: "text.primary" }}>
+            {p.dataKey}: <b>{formatAmount(p.value)}</b>
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - totalTrendSection: { title, products: [{name}, {name}], data: {date, values:[demand,time]}[] }
+ *    — the "totaldeposittrend" trend-data section (see trendApi.js).
+ *    `products[0]` is assumed to be the Demand figure, `products[1]` the
+ *    Time figure — matching the order the API sends them in.
+ *  - demandSection / timeSection: the real "demandDeposits" / "timeDeposits"
+ *    trend-data sections — passed straight through to an embedded
+ *    DateWiseBarPanel when the user drills into one.
+ *  - icon: MUI icon component for the panel header.
+ *  - panelId / selectedPanel / onSelectPanel: click-to-highlight wiring
+ *    for the CARD itself, shared with every other panel.
+ */
+export default function TotalDepositsTrendPanel({
+  totalTrendSection,
+  demandSection,
+  timeSection,
+  icon,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  // null = Level 0 (this panel's own composed chart). "demand" | "time" =
+  // Level 1/2, delegated entirely to an embedded DateWiseBarPanel.
+  const [drillTarget, setDrillTarget] = useState(null);
+
+  const products = Array.isArray(totalTrendSection?.products) ? totalTrendSection.products : [];
+  const demandLabel = products[0]?.name || "Demand Deposit Trends";
+  const timeLabel = products[1]?.name || "Time Deposit Trends";
+
+  const rows = useMemo(() => {
+    if (!Array.isArray(totalTrendSection?.data)) return [];
+    return totalTrendSection.data.map((row) => {
+      const demand = row.values?.[0] ?? 0;
+      const time = row.values?.[1] ?? 0;
+      return {
+        date: formatDateLabel(row.date),
+        [demandLabel]: demand,
+        [timeLabel]: time,
+        Total: demand + time,
+      };
+    });
+  }, [totalTrendSection, demandLabel, timeLabel]);
+
+  const hasData = rows.length > 0;
+
+  // Level 1/2 — delegate entirely to DateWiseBarPanel, which already has
+  // its own overview + single-day drill-down built in.
+  if (drillTarget) {
+    const section = drillTarget === "demand" ? demandSection : timeSection;
+    return (
+      <DateWiseBarPanel
+        section={section}
+        icon={icon}
+        titleOverride={drillTarget === "demand" ? demandLabel.trim() : timeLabel.trim()}
+        onBackToParent={() => setDrillTarget(null)}
+        panelId={panelId}
+        selectedPanel={selectedPanel}
+        onSelectPanel={onSelectPanel}
+      />
+    );
+  }
+
+  // Level 0 — this panel's own composed chart.
+  return (
+    <GlassPanel sx={{ p: 3 }} selected={selectedPanel === panelId} onClick={() => onSelectPanel?.(panelId)}>
+      <PanelHeader icon={icon} title={totalTrendSection?.title || "Total Deposit Trends"} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}>
+        Click a bar to see 7 days of that deposit type
+      </Typography>
+
+      {hasData ? (
+        <Box sx={{ width: "100%", height: 260, "& svg:focus, & svg *:focus": { outline: "none" } }}>
+          <ResponsiveContainer>
+            <ComposedChart data={rows} margin={{ top: 20, right: 8, left: -4, bottom: 6 }} barCategoryGap="30%" barGap={2}>
+              <CartesianGrid vertical={false} stroke={gridStrokeColor} strokeDasharray="3 5" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: theme.palette.text.secondary }} axisLine={{ stroke: gridStrokeColor }} tickLine={false} interval={0} height={30} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11, fill: theme.palette.text.secondary }} axisLine={false} tickLine={false} width={32} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: TOTAL_LINE_COLOR }} axisLine={false} tickLine={false} width={36} />
+              <Tooltip cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }} content={(props) => <TotalTooltip {...props} theme={theme} />} />
+              <Bar
+                yAxisId="left"
+                dataKey={demandLabel}
+                fill={DEMAND_COLOR}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                cursor="pointer"
+                onClick={() => setDrillTarget("demand")}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey={timeLabel}
+                fill={TIME_COLOR}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                cursor="pointer"
+                onClick={() => setDrillTarget("time")}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                stroke={TOTAL_LINE_COLOR}
+                strokeWidth={2}
+                dot={{ r: 3, fill: TOTAL_LINE_COLOR, strokeWidth: 0 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>No data available.</Typography>
+      )}
+
+      <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: DEMAND_COLOR }} />
+          <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}>{demandLabel.trim()}</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: TIME_COLOR }} />
+          <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}>{timeLabel.trim()}</Typography>
+        </Stack>
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: TOTAL_LINE_COLOR }} />
+          <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}>Total (right axis)</Typography>
+        </Stack>
+      </Stack>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*  DateWiseBarPanel.jsx                                                   */
+/*  A multi-date panel — replaces the single-snapshot BarPanel for         */
+/*  Demand Deposits, Time Deposits, and Loan Distribution. Two things      */
+/*  live in this one panel:                                                */
+/*                                                                          */
+/*  1. OVERVIEW — every date in `section.data`.                            */
+/*  2. DRILL-DOWN — click ANY bar/point in the overview and it narrows to   */
+/*     that ONE date's breakdown, all categories, with a Back button to    */
+/*     return. Every bar/point in a cluster shares the same date, so a     */
+/*     click always drills into that date regardless of which one.        */
+/*                                                                          */
+/*  The icon button in the top-right corner swaps whichever view is        */
+/*  currently showing between BAR and LINE rendering.                     */
+/*                                                                          */
+/*  BAR VIEW = a "Line Bar Area Composed Chart" — grouped bars per          */
+/*  category (left axis, unchanged) PLUS a date-wise TOTAL (sum across     */
+/*  categories per date) drawn as a filled area + line on its own          */
+/*  independent right axis, since it's naturally several times larger      */
+/*  than any single category.                                             */
+/*                                                                          */
+/*  LINE VIEW = genuinely biaxial, but NOT via a separate "Total" line     */
+/*  (that moved to the bar view above). Instead, categories are split      */
+/*  into two axis groups by magnitude (smallest half -> left axis,         */
+/*  largest half -> right axis). This is the actual fix for "looks like a  */
+/*  straight/flat line": every category sharing ONE axis scaled to the     */
+/*  largest category's range squashes a smaller category's real day-to-   */
+/*  day movement down to nothing. Splitting by magnitude lets each axis    */
+/*  auto-scale tightly to its own group's actual range, so real movement   */
+/*  in EVERY category becomes visible — plus every line now uses a         */
+/*  smooth ("monotone") curve instead of straight segments.                */
+/*                                                                          */
+/*  Drill-down's line view keeps its own biaxial pairing (a category's     */
+/*  value on the left, the running cumulative total across categories on  */
+/*  the right) — that pairing is unrelated to the overview's and untouched */
+/*  by the changes above, just also drawn with smooth curves now.         */
+/*                                                                          */
+/*  DATA SHAPE — this consumes the "columnar" mock shape directly:         */
+/*    { title, products: [{name, type}], data: [{date, values}] }         */
+/*  where `values[i]` corresponds to `products[i]`. This is currently      */
+/*  wired to the local bankingData.json mock (see DepositsLoansDashboard   */
+/*  .jsx) rather than the live API — swap that one import for a real       */
+/*  fetch when a multi-date endpoint exists; nothing in this file needs    */
+/*  to change since it only cares about the shape above.                  */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  Area,
+  Bar,
+  ComposedChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart as RechartsLineChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import {
+  GlassPanel,
+  PanelHeader,
+  BackButton,
+  RADIUS,
+  textSecondarySx,
+} from "./common";
+import { getColor, formatAmount } from "./utils";
+
+const TOTAL_COLOR = "#E3B831"; // the date-wise Total's fixed accent color, in the bar/composed view only
+const DATA_COLOR = "#4f16aa";
+
+/** "2026-09-17" -> "17-Sep", matching the reference screenshot's axis
+ * label style. Falls back to the raw string if it doesn't parse (never
+ * throws on unexpected date formats). */
+function formatDateLabel(isoDate) {
+  const d = new Date(isoDate);
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+    .replace(" ", "-");
+}
+
+/** Custom line-chart dot that's actually clickable — recharts' `dot={{onClick}}`
+ * shorthand isn't a reliably documented event shape across versions; a
+ * custom render function is the well-documented way to get direct access
+ * to this point's own data row (including __isoDate) with no guessing. */
+function ClickableDot({ cx, cy, payload, fill, radius, onDotClick }) {
+  if (cx == null || cy == null) return null;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={radius}
+      fill={fill}
+      stroke="none"
+      style={{ cursor: onDotClick ? "pointer" : "default" }}
+      onClick={
+        onDotClick
+          ? (e) => {
+              e.stopPropagation();
+              onDotClick(payload.__isoDate);
+            }
+          : undefined
+      }
+    />
+  );
+}
+
+/** Small icon button, top-right, swapping the current view between bar
+ * and line — independent of whether that view is the overview or a
+ * drill-down. */
+function ChartTypeToggle({ chartType, onToggle }) {
+  const isLine = chartType === "line";
+  return (
+    <Tooltip title={isLine ? "Switch to bar chart" : "Switch to line chart"}>
+      <IconButton
+        size="small"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        {isLine ? (
+          <BarChartRoundedIcon fontSize="small" />
+        ) : (
+          <ShowChartRoundedIcon fontSize="small" />
+        )}
+      </IconButton>
+    </Tooltip>
+  );
+}
+
+/** Custom tooltip for the overview (multi-date) chart — lists every
+ * category's value, plus the date-wise Total when present, for the
+ * hovered date. Works for both the composed bar view and the line view,
+ * since it just lists whatever series are actually in `payload`. */
+function OverviewTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  // The composed bar view draws "Total" as both an Area (fill) and a Line
+  // (crisp stroke) sharing the same dataKey, so it appears twice in the
+  // raw payload — keep only the first occurrence of each series.
+  const seen = new Set();
+  const uniquePayload = payload.filter((p) => {
+    if (seen.has(p.dataKey)) return false;
+    seen.add(p.dataKey);
+    return true;
+  });
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+        maxWidth: 220,
+      }}
+    >
+      <Typography
+        sx={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          color: "text.secondary",
+          mb: 0.5,
+        }}
+      >
+        {label}
+      </Typography>
+      {uniquePayload.map((p) => (
+        <Stack
+          key={p.dataKey}
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          sx={{ mb: 0.25 }}
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: "2px",
+              bgcolor: p.color,
+              flexShrink: 0,
+            }}
+          />
+          <Typography sx={{ fontSize: 11.5, color: "text.primary" }} noWrap>
+            {p.dataKey}: <b>{formatAmount(p.value)}</b>
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+}
+
+/** Custom tooltip for the drill-down (single-date) chart — shows the
+ * category's own value (left axis) and, when present, the running
+ * cumulative total (right axis, line view only). */
+function DrilldownTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const valuePoint = payload.find((p) => p.dataKey === "value");
+  const cumulativePoint = payload.find((p) => p.dataKey === "cumulative");
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}
+      >
+        {label}
+      </Typography>
+      {valuePoint && (
+        <Typography
+          sx={{
+            fontSize: 14,
+            fontWeight: 800,
+            color: valuePoint.payload.__color,
+          }}
+        >
+          {formatAmount(valuePoint.value)}
+        </Typography>
+      )}
+      {cumulativePoint && (
+        <Typography
+          sx={{ fontSize: 11.5, fontWeight: 600, color: TOTAL_COLOR }}
+        >
+          Running total: {formatAmount(cumulativePoint.value)}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * Props:
+ *  - section: { title, products: {name, type}[], data: {date, values: number[]}[] }
+ *    (matches bankingData.json's per-section shape exactly)
+ *  - icon: MUI icon component for the panel header
+ *  - onDrilldownChange: optional (date: string | null) => void, fired
+ *    whenever the drill-down state changes — lets a parent know without
+ *    lifting the whole state up.
+ *  - panelId / selectedPanel / onSelectPanel: optional click-to-highlight
+ *    wiring, shared with every other panel (see GlassPanel in common.jsx).
+ */
+export default function DateWiseBarPanel({
+  section,
+  icon,
+  onDrilldownChange,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+  onBackToParent, // optional: renders an extra Back button at THIS component's top (overview) level — for when a wrapping panel embeds this as a sub-view (see TotalDepositsTrendPanel.jsx) and needs its own way back up, separate from this component's own date-drilldown Back button
+  titleOverride, // optional: shown instead of section.title — for when a wrapping panel wants a more specific label
+}) {
+  const theme = useTheme();
+  const [chartType, setChartType] = useState("bar"); // "bar" | "line" — applies to whichever view is active
+  const [selectedDate, setSelectedDate] = useState(null); // null = overview, else the drilled-into date
+
+  // Defensive fallback — with real network data, `section` can briefly be
+  // undefined (still loading, or this key wasn't in the response) instead
+  // of always synchronously present like the old bankingData.json mock
+  // was. Every hook below still needs to run every render (Rules of
+  // Hooks), so it runs against this safe empty shape; the actual "no
+  // data" message is rendered further down, after all hooks have run.
+  const safeTitle = titleOverride || section?.title || "";
+  const products = Array.isArray(section?.products) ? section.products : [];
+  const dataRows = Array.isArray(section?.data) ? section.data : [];
+
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  // One consistent color per PRODUCT (category), by its fixed position in
+  // the products list — never by date or render order, so a category's
+  // color never shifts between the overview and a drill-down.
+  const colorForProduct = useMemo(() => {
+    const map = new Map(
+      products.map((p, i) => [p.name, getColor(p.name, i, theme)]),
+    );
+    return (name) => map.get(name) || getColor(name, 0, theme);
+  }, [products, theme]);
+
+  // NEW: splits categories into a "left axis" and "right axis" group by
+  // magnitude (using each category's most recent value) — this is what
+  // makes the overview LINE view genuinely biaxial, and is the actual fix
+  // for lines looking flat: one shared axis scaled to the largest
+  // category flattens a smaller category's real day-to-day movement.
+  const axisGroupFor = useMemo(() => {
+    const latest = products.map((p, i) => ({
+      name: p.name,
+      value: dataRows[dataRows.length - 1]?.values[i] ?? 0,
+    }));
+    const sorted = [...latest].sort((a, b) => a.value - b.value);
+    const mid = Math.ceil(sorted.length / 2);
+    const map = new Map(
+      sorted.map((item, idx) => [item.name, idx < mid ? "left" : "right"]),
+    );
+    return (name) => map.get(name) || "left";
+  }, [products, dataRows]);
+
+  // Overview rows: one object per date, with each product's value keyed
+  // by its own name — the shape Recharts' multi-series Bar/Line chart
+  // wants (one <Bar>/<Line> per key) — plus a "Total" (sum across
+  // products) for the composed bar view's right axis.
+  const overviewRows = useMemo(
+    () =>
+      dataRows.map((row) => {
+        const entry = { date: formatDateLabel(row.date), __isoDate: row.date };
+        products.forEach((p, i) => {
+          entry[p.name] = row.values[i];
+        });
+        entry.Total = row.values.reduce((sum, v) => sum + v, 0);
+        return entry;
+      }),
+    [dataRows, products],
+  );
+
+  // Drill-down rows: the single selected date's products, reshaped into
+  // the flat { name, value, __color } list the rest of the dashboard's
+  // single-series charts already use — plus a running "cumulative" total
+  // across categories (in the given product order) for the line view's
+  // right axis.
+  const drilldownRows = useMemo(() => {
+    if (!selectedDate) return [];
+    const row = dataRows.find((d) => d.date === selectedDate);
+    if (!row) return [];
+    let running = 0;
+    return products.map((p, i) => {
+      running += row.values[i];
+      return {
+        name: p.name,
+        value: row.values[i],
+        cumulative: running,
+        __color: colorForProduct(p.name),
+      };
+    });
+  }, [selectedDate, dataRows, products, colorForProduct]);
+
+  const handleDrillInto = (isoDate) => {
+    setSelectedDate(isoDate);
+    onDrilldownChange?.(isoDate);
+  };
+
+  const handleBack = () => {
+    setSelectedDate(null);
+    onDrilldownChange?.(null);
+  };
+
+  const isDrilldown = Boolean(selectedDate);
+  const drilldownLabel = isDrilldown ? formatDateLabel(selectedDate) : null;
+
+  // No section for this key yet (still loading, or missing from the
+  // response) — show a lightweight placeholder instead of crashing on
+  // products/data that don't exist. Same GlassPanel/PanelHeader shell and
+  // text style as the rest of the dashboard, so it doesn't look like a
+  // different kind of thing.
+  if (!section) {
+    return (
+      <GlassPanel
+        sx={{ p: 3 }}
+        selected={selectedPanel === panelId}
+        onClick={() => onSelectPanel?.(panelId)}
+      >
+        <PanelHeader icon={icon} title={safeTitle || "—"} />
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>
+          No data available.
+        </Typography>
+      </GlassPanel>
+    );
+  }
+
+  return (
+    <GlassPanel
+      sx={{ p: 3 }}
+      selected={selectedPanel === panelId}
+      onClick={() => onSelectPanel?.(panelId)}
+    >
+      <PanelHeader
+        icon={icon}
+        title={isDrilldown ? `${safeTitle} — ${drilldownLabel}` : safeTitle}
+        action={
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {isDrilldown && <BackButton onBack={handleBack} />}
+            {!isDrilldown && onBackToParent && <BackButton onBack={onBackToParent} />}
+            <ChartTypeToggle
+              chartType={chartType}
+              onToggle={() =>
+                setChartType((v) => (v === "bar" ? "line" : "bar"))
+              }
+            />
+          </Stack>
+        }
+      />
+      {!isDrilldown && (
+        <Typography
+          sx={{ ...textSecondarySx, fontSize: 12.5, mt: -1.5, mb: 1.5 }}
+        >
+          Click any bar to see that date's breakdown
+        </Typography>
+      )}
+
+      <Box
+        sx={{
+          width: "100%",
+          height: 260,
+          "& svg:focus, & svg *:focus": { outline: "none" },
+        }}
+      >
+        <ResponsiveContainer>
+          {isDrilldown ? (
+            chartType === "line" ? (
+              <RechartsLineChart
+                data={drilldownRows}
+                margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke={gridStrokeColor}
+                  strokeDasharray="3 5"
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                  axisLine={{ stroke: gridStrokeColor }}
+                  tickLine={false}
+                  interval={0}
+                  height={38}
+                />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fontSize: 11, fill: theme.palette.primary.main }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11, fill: TOTAL_COLOR }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <RechartsTooltip
+                  content={(props) => (
+                    <DrilldownTooltip {...props} theme={theme} />
+                  )}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="value"
+                  name="Value"
+                  stroke={theme.palette.primary.main}
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: theme.palette.primary.main,
+                    strokeWidth: 0,
+                  }}
+                  isAnimationActive={false}
+                />
+              </RechartsLineChart>
+            ) : (
+              <ComposedChart
+                data={drilldownRows}
+                margin={{ top: 20, right: 16, left: -4, bottom: 6 }}
+                barCategoryGap="32%"
+              >
+                <CartesianGrid
+                  vertical={false}
+                  stroke={gridStrokeColor}
+                  strokeDasharray="3 5"
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                  axisLine={{ stroke: gridStrokeColor }}
+                  tickLine={false}
+                  interval={0}
+                  height={38}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                />
+                <RechartsTooltip
+                  cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+                  content={(props) => (
+                    <DrilldownTooltip {...props} theme={theme} />
+                  )}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={40}>
+                  {drilldownRows.map((d) => (
+                    <Cell key={d.name} fill={d.__color} />
+                  ))}
+                </Bar>
+              </ComposedChart>
+            )
+          ) : chartType === "line" ? (
+            <RechartsLineChart
+              data={overviewRows}
+              margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={30}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+              <RechartsTooltip
+                content={(props) => (
+                  <OverviewTooltip {...props} theme={theme} />
+                )}
+              />
+              {products.map((p) => (
+                <Line
+                  key={p.name}
+                  yAxisId={axisGroupFor(p.name)}
+                  type="monotone"
+                  dataKey={p.name}
+                  stroke={colorForProduct(p.name)}
+                  strokeWidth={2}
+                  dot={(dotProps) => (
+                    <ClickableDot
+                      key={dotProps.payload.__isoDate}
+                      {...dotProps}
+                      fill={colorForProduct(p.name)}
+                      radius={3}
+                      onDotClick={handleDrillInto}
+                    />
+                  )}
+                  activeDot={(dotProps) => (
+                    <ClickableDot
+                      key={`active-${dotProps.payload.__isoDate}`}
+                      {...dotProps}
+                      fill={colorForProduct(p.name)}
+                      radius={5}
+                      onDotClick={handleDrillInto}
+                    />
+                  )}
+                  isAnimationActive={false}
+                />
+              ))}
+            </RechartsLineChart>
+          ) : (
+            <ComposedChart
+              data={overviewRows}
+              margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+              barCategoryGap="20%"
+              barGap={2}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={30}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: DATA_COLOR }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+              <RechartsTooltip
+                cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+                content={(props) => (
+                  <OverviewTooltip {...props} theme={theme} />
+                )}
+              />
+              {products.map((p) => (
+                <Bar
+                  key={p.name}
+                  yAxisId="left"
+                  dataKey={p.name}
+                  fill={colorForProduct(p.name)}
+                  radius={[3, 3, 0, 0]}
+                  maxBarSize={18}
+                  cursor="pointer"
+                  onClick={(data) => handleDrillInto(data.__isoDate)}
+                />
+              ))}
+              <Area
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                name="Total"
+                fill={TOTAL_COLOR}
+                fillOpacity={0.12}
+                stroke="none"
+                isAnimationActive={false}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                name="Total"
+                stroke={TOTAL_COLOR}
+                strokeWidth={2}
+                dot={(dotProps) => (
+                  <ClickableDot
+                    key={`total-${dotProps.payload.__isoDate}`}
+                    {...dotProps}
+                    fill={TOTAL_COLOR}
+                    radius={3}
+                    onDotClick={handleDrillInto}
+                  />
+                )}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </Box>
+
+      <Box
+        sx={{
+          mt: 1.5,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+          rowGap: 0.75,
+          columnGap: 1.5,
+        }}
+      >
+        {products.map((p) => (
+          <Stack
+            key={p.name}
+            direction="row"
+            spacing={0.75}
+            alignItems="center"
+          >
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "2px",
+                bgcolor: colorForProduct(p.name),
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
+              noWrap
+            >
+              {p.name}
+            </Typography>
+          </Stack>
+        ))}
+        {!isDrilldown && chartType === "bar" && (
+          <Stack direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "2px",
+                bgcolor: TOTAL_COLOR,
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
+              noWrap
+            >
+              Total (right axis)
+            </Typography>
+          </Stack>
+        )}
+      </Box>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  DepositsLoansDashboard.jsx — root component                            */
+/* ---------------------------------------------------------------------- */
+/*  DepositsLoansDashboard.jsx — root component                            */
+/*  Purely presentational/compositional. Every number on screen comes      */
+/*  from the `data` prop. Nothing is imported or hardcoded here for the    */
+/*  treemaps/gauge — see DashboardPage.jsx for how the real API's          */
+/*  response gets mapped into this shape (mapApiToDashboardData.js).       */
+/*                                                                          */
+/*  Loans section restored — the API now returns a `loans` object. Its     */
+/*  single item list drives both the composition treemap and the          */
+/*  breakdown bar panel below, the same way Deposits does with two         */
+/*  separate demand/time lists.                                           */
+/*                                                                          */
+/*  DEMAND/TIME DEPOSITS — per request, these two are now TrendBubbleChart */
+/*  (view-only bubble/scatter, no click interaction), replacing            */
+/*  DateWiseBarPanel in these two slots specifically.                     */
+/*                                                                          */
+/*  LOAN DISTRIBUTION — still DateWiseBarPanel (multi-date, drill-         */
+/*  downable, bar/biaxial-line toggle), unchanged.                        */
+/*                                                                          */
+/*  NEW — Total Deposits Trend (3-level drill: composed chart -> Demand/   */
+/*  Time 7-day overview -> single-day breakdown; see                       */
+/*  TotalDepositsTrendPanel.jsx) and CASA Trend (view-only filled area      */
+/*  chart; see CasaTrendChart.jsx), added as a new row below.              */
+/*                                                                          */
+/*  All trend data comes from the `trendSections` prop — the real          */
+/*  /DS/dashboard/trend-data response, mapped by trendApi.js.             */
+/* ---------------------------------------------------------------------- */
+
+import React, { useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
+import { textPrimarySx, textSecondarySx } from "./common";
+import HeatTree from "./HeatTree";
+import Gauge from "./Gauge";
+import DateWiseBarPanel from "./DateWiseBarPanel";
+import TrendBubbleChart from "./TrendBubbleChart";
+import TotalDepositsTrendPanel from "./TotalDepositsTrendPanel";
+import CasaTrendChart from "./CasaTrendChart";
+
+/** Page title/subtitle. Only used once, kept inline rather than as its
+ * own file. */
+function DashboardHeader({ config }) {
+  return (
+    <Stack
+      direction={{ xs: "column", lg: "row" }}
+      alignItems={{ xs: "flex-start", lg: "center" }}
+      justifyContent="space-between"
+      spacing={2}
+      sx={{ px: 0.5 }}
+    >
+      <Box>
+        <Typography
+          sx={{
+            ...textPrimarySx,
+            fontSize: { xs: 20, md: 24 },
+            fontWeight: 700,
+          }}
+        >
+          {config.title}
+        </Typography>
+        {config.subtitle && (
+          <Typography sx={{ ...textSecondarySx, fontSize: 13, mt: 0.25 }}>
+            {config.subtitle}
+          </Typography>
+        )}
+      </Box>
+    </Stack>
+  );
+}
+
+/** Looks up one trend section by its `key` from the trendSections prop —
+ * same lookup pattern as before, just reading from a prop (the real API
+ * response) instead of an imported mock file. */
+function trendSection(trendSections, key) {
+  return trendSections?.find((s) => s.key === key);
+}
+
+/**
+ * Props:
+ *  - data: {
+ *      header: { title, subtitle },
+ *      casaGauge: { title, subtitle, value: number | null, centerLabel, bands?: { low, high } },
+ *      depositsComposition: {
+ *        title, subtitle,
+ *        items: { name, value, share, type }[],
+ *        legend: { name }[],
+ *        filterOptions?: string[], activeFilter?: string,
+ *      },
+ *      loansComposition: { title, subtitle, items, legend, filterOptions?, activeFilter? },
+ *    }
+ *    (demandDeposits/termDeposits/loansBreakdown are not read from `data`
+ *    — see `trendSections` below.)
+ *  - trendSections: { key, title, products, data }[] — from
+ *    /DS/dashboard/trend-data via trendApi.js's mapTrendDataToSections().
+ *    Looked up by `key` for each of the three DateWiseBarPanel calls below.
+ */
+export default function DepositsLoansDashboard({ data, trendSections }) {
+  const [selectedPanel, setSelectedPanel] = useState(null);
+
+  if (!data) return null;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2.5,
+        minHeight: "90vh",
+      }}
+    >
+      {/* Header not needed for now — commented out, not deleted. Uncomment
+          to bring it back. */}
+      {/* <DashboardHeader config={data.header} /> */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "3fr 2fr" },
+          gap: 2.5,
+        }}
+      >
+        <HeatTree
+          config={data.depositsComposition}
+          icon={AccountBalanceRoundedIcon}
+          gradientDark="#4f0e68"
+          gradientLight="#ea80ff"
+          shareLabel="of deposits"
+          panelId="deposits-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <HeatTree
+          config={data.loansComposition}
+          icon={AccountBalanceWalletRoundedIcon}
+          gradientDark="#086083"
+          gradientLight="#9ee7fd"
+          shareLabel="of loans"
+          panelId="loans-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "3fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <DateWiseBarPanel
+          icon={TrendingUpRoundedIcon}
+          section={trendSection(trendSections, "loansBreakdown")}
+          panelId="loan-distribution-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <Gauge
+          config={data.casaGauge}
+          panelId="casa-gauge"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <TrendBubbleChart
+          icon={DescriptionRoundedIcon}
+          section={trendSection(trendSections, "demandDeposits")}
+          panelId="demand-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <TrendBubbleChart
+          icon={DescriptionRoundedIcon}
+          section={trendSection(trendSections, "timeDeposits")}
+          panelId="term-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "3fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <TotalDepositsTrendPanel
+          icon={ShowChartRoundedIcon}
+          totalTrendSection={trendSection(trendSections, "totaldeposittrend")}
+          demandSection={trendSection(trendSections, "demandDeposits")}
+          timeSection={trendSection(trendSections, "timeDeposits")}
+          panelId="total-deposits-trend"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <CasaTrendChart
+          icon={PieChartRoundedIcon}
+          section={trendSection(trendSections, "casatrend")}
+          panelId="casa-trend"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+    </Box>
+  );
+}
 
