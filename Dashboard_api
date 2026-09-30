@@ -8,662 +8,307 @@ GET      "/DS/dashboard/trend-data"
 // Tread data rwesponse
 
 {
-    "data": [
-        {
-            "key": "demandDeposits",
-            "title": "Demand Deposits",
-            "products": [
-                {
-                    "name": "Saving Bank A/c",
-                    "type": "Demand Deposit"
+    "data": {
+        "trendsDashboardData": {
+            "YSA": {
+                "totalDeposits": {
+                    "data": [
+                        {
+                            "date": "12-04-2026",
+                            "values": [
+                                45.0,
+                                12.0,
+                                78.0,
+                                33.0,
+                                56.0,
+                                91.0,
+                                27.0,
+                                64.0
+                            ]
+                        },
+                        {
+                            "date": "13-04-2026",
+                            "values": [
+                                48.0,
+                                10.0,
+                                80.0,
+                                35.0,
+                                54.0,
+                                89.0,
+                                25.0,
+                                66.0
+                            ]
+                        },
+                        {
+                            "date": "14-04-2026",
+                            "values": [
+                                43.0,
+                                14.0,
+                                76.0,
+                                31.0,
+                                58.0,
+                                93.0,
+                                29.0,
+                                62.0
+                            ]
+                        }
+                    ],
+                    "key": "totalDeposits",
+                    "products": [
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01039",
+                            "type": "Deposit",
+                            "name": "Saving Bank A/c"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01059",
+                            "type": "Deposit",
+                            "name": "Current A/c"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01069",
+                            "type": "Deposit",
+                            "name": "Cash Credit Cr Balance"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01099",
+                            "type": "Deposit",
+                            "name": "Other Demand Deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01129",
+                            "type": "Deposit",
+                            "name": "term deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01149",
+                            "type": "Deposit",
+                            "name": "Special Term Deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01169",
+                            "type": "Deposit",
+                            "name": "Other Term Deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "02767",
+                            "type": "Deposit",
+                            "name": "Certificate of Deposit "
+                        }
+                    ],
+                    "subTitle": "Total Deposit Trends ",
+                    "title": "Total Deposits"
                 },
-                {
-                    "name": "Current A/c",
-                    "type": "Demand Deposit"
+                "demandDeposits": {
+                    "data": [
+                        {
+                            "date": "12-04-2026",
+                            "values": [
+                                45.0,
+                                12.0,
+                                78.0,
+                                33.0
+                            ]
+                        },
+                        {
+                            "date": "13-04-2026",
+                            "values": [
+                                48.0,
+                                10.0,
+                                80.0,
+                                35.0
+                            ]
+                        },
+                        {
+                            "date": "14-04-2026",
+                            "values": [
+                                43.0,
+                                14.0,
+                                76.0,
+                                31.0
+                            ]
+                        }
+                    ],
+                    "key": "demandDeposits",
+                    "products": [
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01039",
+                            "type": "Deposit",
+                            "name": "Saving Bank A/c"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01059",
+                            "type": "Deposit",
+                            "name": "Current A/c"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01069",
+                            "type": "Deposit",
+                            "name": "Cash Credit Cr Balance"
+                        },
+                        {
+                            "subType": "Demand Deposit",
+                            "code": "01099",
+                            "type": "Deposit",
+                            "name": "Other Demand Deposit "
+                        }
+                    ],
+                    "title": "Demand Deposits"
                 },
-                {
-                    "name": "Cash Credit Cr Balance",
-                    "type": "Demand Deposit"
+                "timeDeposits": {
+                    "data": [
+                        {
+                            "date": "12-04-2026",
+                            "values": [
+                                56.0,
+                                91.0,
+                                27.0,
+                                64.0
+                            ]
+                        },
+                        {
+                            "date": "13-04-2026",
+                            "values": [
+                                54.0,
+                                89.0,
+                                25.0,
+                                66.0
+                            ]
+                        },
+                        {
+                            "date": "14-04-2026",
+                            "values": [
+                                58.0,
+                                93.0,
+                                29.0,
+                                62.0
+                            ]
+                        }
+                    ],
+                    "key": "timeDeposits",
+                    "products": [
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01129",
+                            "type": "Deposit",
+                            "name": "term deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01149",
+                            "type": "Deposit",
+                            "name": "Special Term Deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "01169",
+                            "type": "Deposit",
+                            "name": "Other Term Deposit "
+                        },
+                        {
+                            "subType": "Time Deposit",
+                            "code": "02767",
+                            "type": "Deposit",
+                            "name": "Certificate of Deposit "
+                        }
+                    ],
+                    "title": "Time Deposits"
                 },
-                {
-                    "name": "Other Demand Deposit ",
-                    "type": "Demand Deposit"
+                "loans": {
+                    "data": [
+                        {
+                            "date": "12-04-2026",
+                            "values": [
+                                19.0,
+                                82.0,
+                                41.0,
+                                55.0,
+                                73.0,
+                                79.0
+                            ]
+                        },
+                        {
+                            "date": "13-04-2026",
+                            "values": [
+                                21.0,
+                                84.0,
+                                39.0,
+                                57.0,
+                                71.0,
+                                77.0
+                            ]
+                        },
+                        {
+                            "date": "14-04-2026",
+                            "values": [
+                                17.0,
+                                80.0,
+                                43.0,
+                                53.0,
+                                75.0,
+                                81.0
+                            ]
+                        }
+                    ],
+                    "key": "loans",
+                    "products": [
+                        {
+                            "subType": "Loan",
+                            "code": "20159",
+                            "type": "Loan",
+                            "name": "Bills Payable "
+                        },
+                        {
+                            "subType": "Loan",
+                            "code": "20172",
+                            "type": "Loan",
+                            "name": "Demand Loan "
+                        },
+                        {
+                            "subType": "Loan",
+                            "code": "20190",
+                            "type": "Loan",
+                            "name": "Cash Credit "
+                        },
+                        {
+                            "subType": "Loan",
+                            "code": "20197",
+                            "type": "Loan",
+                            "name": "Agri Cash Credit "
+                        },
+                        {
+                            "subType": "Loan",
+                            "code": "20208",
+                            "type": "Loan",
+                            "name": "Overdraft "
+                        },
+                        {
+                            "subType": "Loan",
+                            "code": "20239",
+                            "type": "Loan",
+                            "name": "Term Loan Account"
+                        }
+                    ],
+                    "subTitle": "Loans by category",
+                    "title": "Loans"
                 }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        46.7,
-                        33.3,
-                        67.6,
-                        61.8
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        46.4,
-                        32.1,
-                        65.4,
-                        64.5
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        43.4,
-                        31.8,
-                        67.4,
-                        61.0
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        44.8,
-                        34.0,
-                        64.4,
-                        61.5
-                    ]
-                },
-                {
-                    "date": "2026-09-23",
-                    "values": [
-                        45.0,
-                        33.5,
-                        67.0,
-                        63.6
-                    ]
-                },
-                {
-                    "date": "2026-09-24",
-                    "values": [
-                        44.6,
-                        34.5,
-                        64.9,
-                        62.0
-                    ]
-                },
-                {
-                    "date": "2026-09-25",
-                    "values": [
-                        47.0,
-                        33.9,
-                        68.0,
-                        63.3
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "casatrend",
-            "title": "Casa Trends",
-            "products": [
-                {
-                    "name": "Casa Ratio Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        0.44
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        0.47
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        0.41
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        0.34
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        0.22
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        0.11
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        0.11
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "totaldeposittrend",
-            "title": "Total Deposit Trends",
-            "products": [
-                {
-                    "name": "Demand Deposit Trends ",
-                    "type": null
-                },
-                {
-                    "name": "Time Deposit Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        33.4,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        45.43,
-                        22.3
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        23.53,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        13.97,
-                        43.43
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        46.43,
-                        22.34
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        48.43,
-                        21.23
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        49.43,
-                        23.2
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "timeDeposits",
-            "title": "Time Deposits",
-            "products": [
-                {
-                    "name": "Certificate of Deposit ",
-                    "type": "Time Deposit"
-                },
-                {
-                    "name": "Certificate of Deposit ",
-                    "type": "Time Deposit"
-                },
-                {
-                    "name": "term deposit ",
-                    "type": "Time Deposit"
-                },
-                {
-                    "name": "Special Term Deposit ",
-                    "type": "Time Deposit"
-                },
-                {
-                    "name": "Other Term Deposit ",
-                    "type": "Time Deposit"
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        70.1,
-                        70.7,
-                        39.4,
-                        64.0,
-                        55.2
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        67.8,
-                        70.7,
-                        37.7,
-                        61.4,
-                        57.8
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        68.2,
-                        70.8,
-                        37.0,
-                        64.5,
-                        56.2
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        70.9,
-                        67.4,
-                        37.9,
-                        63.4,
-                        57.1
-                    ]
-                },
-                {
-                    "date": "2026-09-23",
-                    "values": [
-                        67.0,
-                        68.2,
-                        37.5,
-                        62.4,
-                        57.6
-                    ]
-                },
-                {
-                    "date": "2026-09-24",
-                    "values": [
-                        68.1,
-                        70.9,
-                        38.2,
-                        62.2,
-                        59.0
-                    ]
-                },
-                {
-                    "date": "2026-09-25",
-                    "values": [
-                        67.3,
-                        68.2,
-                        39.9,
-                        61.5,
-                        58.2
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "casatrend",
-            "title": "Casa Trends",
-            "products": [
-                {
-                    "name": "Casa Ratio Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        0.44
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        0.47
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        0.41
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        0.34
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        0.22
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        0.11
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        0.11
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "totaldeposittrend",
-            "title": "Total Deposit Trends",
-            "products": [
-                {
-                    "name": "Demand Deposit Trends ",
-                    "type": null
-                },
-                {
-                    "name": "Time Deposit Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        33.4,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        45.43,
-                        22.3
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        23.53,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        13.97,
-                        43.43
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        46.43,
-                        22.34
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        48.43,
-                        21.23
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        49.43,
-                        23.2
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "loansBreakdown",
-            "title": "Loans",
-            "products": [
-                {
-                    "name": "Bills Payable ",
-                    "type": "Loan"
-                },
-                {
-                    "name": "Demand Loan ",
-                    "type": "Loan"
-                },
-                {
-                    "name": "Cash Credit ",
-                    "type": "Loan"
-                },
-                {
-                    "name": "Agri Cash Credit ",
-                    "type": "Loan"
-                },
-                {
-                    "name": "Overdraft ",
-                    "type": "Loan"
-                },
-                {
-                    "name": "Term Loan Account",
-                    "type": "Loan"
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        40.4,
-                        35.5,
-                        37.8,
-                        51.1,
-                        29.0,
-                        52.0
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        43.2,
-                        36.0,
-                        34.9,
-                        51.0,
-                        28.3,
-                        49.1
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        40.0,
-                        35.5,
-                        34.3,
-                        51.6,
-                        28.6,
-                        50.9
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        41.8,
-                        34.4,
-                        36.7,
-                        51.2,
-                        29.9,
-                        51.2
-                    ]
-                },
-                {
-                    "date": "2026-09-23",
-                    "values": [
-                        41.0,
-                        34.2,
-                        35.7,
-                        49.8,
-                        31.4,
-                        49.6
-                    ]
-                },
-                {
-                    "date": "2026-09-24",
-                    "values": [
-                        43.8,
-                        34.5,
-                        37.5,
-                        51.3,
-                        30.3,
-                        51.3
-                    ]
-                },
-                {
-                    "date": "2026-09-25",
-                    "values": [
-                        43.0,
-                        37.6,
-                        35.2,
-                        50.4,
-                        30.9,
-                        53.0
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "casatrend",
-            "title": "Casa Trends",
-            "products": [
-                {
-                    "name": "Casa Ratio Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        0.44
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        0.47
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        0.41
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        0.34
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        0.22
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        0.11
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        0.11
-                    ]
-                }
-            ]
-        },
-        {
-            "key": "totaldeposittrend",
-            "title": "Total Deposit Trends",
-            "products": [
-                {
-                    "name": "Demand Deposit Trends ",
-                    "type": null
-                },
-                {
-                    "name": "Time Deposit Trends ",
-                    "type": null
-                }
-            ],
-            "data": [
-                {
-                    "date": "2026-09-16",
-                    "values": [
-                        33.4,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-17",
-                    "values": [
-                        45.43,
-                        22.3
-                    ]
-                },
-                {
-                    "date": "2026-09-18",
-                    "values": [
-                        23.53,
-                        45.43
-                    ]
-                },
-                {
-                    "date": "2026-09-19",
-                    "values": [
-                        13.97,
-                        43.43
-                    ]
-                },
-                {
-                    "date": "2026-09-20",
-                    "values": [
-                        46.43,
-                        22.34
-                    ]
-                },
-                {
-                    "date": "2026-09-21",
-                    "values": [
-                        48.43,
-                        21.23
-                    ]
-                },
-                {
-                    "date": "2026-09-22",
-                    "values": [
-                        49.43,
-                        23.2
-                    ]
-                }
-            ]
+            }
         }
-    ],
+    },
     "message": "7-Day trend data loaded successfully",
     "success": true,
-    "timestamp": "2026-09-25T09:30:35.239332500Z"
+    "timestamp": "2026-09-30T09:58:32.045194Z"
 }
 
 
