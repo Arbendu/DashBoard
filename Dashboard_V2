@@ -1,1 +1,864 @@
+/* ---- Trend dates -----------------------------------------------------
+ * The trend-data API sends dates as "DD-MM-YYYY" (e.g. "14-04-2026").
+ * new Date("12-04-2026") is NOT safe — it gets read as 4 Dec. So dates
+ * are parsed explicitly. ISO "YYYY-MM-DD" is still accepted. */
+
+export function parseTrendDate(raw) {
+  const str = String(raw ?? "").trim();
+  let m = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/); // DD-MM-YYYY
+  if (m) {
+    const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // YYYY-MM-DD
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+/** "14-04-2026" (or "2026-04-14") -> "14-Apr". Never throws. */
+export function formatDateLabel(rawDate) {
+  const d = parseTrendDate(rawDate);
+  if (!d) return String(rawDate ?? "");
+  return d
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+    .replace(" ", "-");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  trendApi.js                                                            */
+/*  GET /DS/dashboard/trend-data — endpoint path + response mapping into   */
+/*  { key, title, products, data }[] sections. Validates everything so a   */
+/*  malformed response can never crash the dashboard.                     */
+/* ---------------------------------------------------------------------- */
+
+import { normalizeDepositName, parseTrendDate } from "./utils";
+
+export const TREND_DATA_ENDPOINT = "/DS/dashboard/trend-data";
+
+/** Finite, non-negative number, or 0 if it can't be trusted. */
+function toSafeAmount(raw) {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+function mapProducts(rawProducts) {
+  if (!Array.isArray(rawProducts)) return [];
+  return rawProducts
+    .filter((p) => p && typeof p === "object")
+    .map((p) => ({
+      name: normalizeDepositName(p.name),
+      type: String(p.type || "")
+        .replace(/\s+/g, " ")
+        .trim(),
+      // Kept so Total Deposits can split products into Demand vs Time.
+      subType: String(p.subType || "")
+        .replace(/\s+/g, " ")
+        .trim(),
+      code: typeof p.code === "string" ? p.code : "",
+    }));
+}
+
+/** Each row's `values` lines up 1:1 with `products` (pads/trims), and rows
+ * are sorted oldest -> newest so the last row is always the latest date. */
+function mapDataRows(rawData, expectedLength) {
+  if (!Array.isArray(rawData)) return [];
+  return rawData
+    .filter(
+      (row) => row && typeof row === "object" && typeof row.date === "string",
+    )
+    .map((row) => {
+      const rawValues = Array.isArray(row.values) ? row.values : [];
+      const values = Array.from({ length: expectedLength }, (_, i) =>
+        toSafeAmount(rawValues[i]),
+      );
+      return { date: row.date, values };
+    })
+    .sort((a, b) => {
+      const da = parseTrendDate(a.date);
+      const db = parseTrendDate(b.date);
+      if (!da || !db) return 0;
+      return da - db;
+    });
+}
+
+function mapSection(rawSection, fallbackKey = "") {
+  if (!rawSection || typeof rawSection !== "object") return null;
+  const products = mapProducts(rawSection.products);
+  return {
+    key: typeof rawSection.key === "string" ? rawSection.key : fallbackKey,
+    title: typeof rawSection.title === "string" ? rawSection.title : "",
+    products,
+    data: mapDataRows(rawSection.data, products.length),
+  };
+}
+
+/**
+ * @param rawResponseData — response.data from /DS/dashboard/trend-data:
+ *   { trendsDashboardData: { YSA: { totalDeposits, demandDeposits,
+ *   timeDeposits, loans } } }, or a plain array of sections (old shape).
+ */
+export function mapTrendDataToSections(rawResponseData) {
+  // Old shape: an array of sections.
+  if (Array.isArray(rawResponseData)) {
+    return rawResponseData.map((sec) => mapSection(sec)).filter(Boolean);
+  }
+  // New shape: an object of sections under trendsDashboardData.YSA
+  // (falls back to the first branch if "YSA" isn't present).
+  const container = rawResponseData?.trendsDashboardData;
+  if (!container || typeof container !== "object") return [];
+  const branch =
+    container.YSA ??
+    Object.values(container).find((v) => v && typeof v === "object");
+  if (!branch || typeof branch !== "object") return [];
+  return Object.entries(branch)
+    .map(([key, sec]) => mapSection(sec, key))
+    .filter(Boolean);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  TotalDepositsTrendPanel.jsx                                            */
+/*  LEVEL 0 — "totalDeposits" section: for EACH DATE the 8 product values  */
+/*  are summed by subType into Demand and Time -> two bars per day (left   */
+/*  axis) + a Total line (right axis). Clicking a bar type drills into     */
+/*  LEVEL 1 (that type's 7-day breakdown via DateWiseBarPanel), which has  */
+/*  its own single-day drill-down (LEVEL 2).                              */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo, useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+import { formatAmount, formatDateLabel } from "./utils";
+import DateWiseBarPanel from "./DateWiseBarPanel";
+
+const DEMAND_COLOR = "#2a78d6";
+const TIME_COLOR = "#6250d6";
+const TOTAL_LINE_COLOR = "#eb6834";
+
+const DEMAND_LABEL = "Demand Deposits";
+const TIME_LABEL = "Time Deposits";
+
+/** "demand" | "time" | null, from the product's subType (falls back to type). */
+function bucketFor(product) {
+  const tag = String(product?.subType || product?.type || "").toLowerCase();
+  if (tag.includes("demand")) return "demand";
+  if (tag.includes("time") || tag.includes("term")) return "time";
+  return null;
+}
+
+/** Sub-section with only one bucket's products — fallback for the Level 1
+ * drill-down if the API omits demandDeposits/timeDeposits. */
+function subSectionFor(section, bucket, title) {
+  if (!section) return undefined;
+  const products = Array.isArray(section.products) ? section.products : [];
+  const idx = products
+    .map((p, i) => (bucketFor(p) === bucket ? i : -1))
+    .filter((i) => i >= 0);
+  return {
+    key: `${section.key || "total"}-${bucket}`,
+    title,
+    products: idx.map((i) => products[i]),
+    data: (Array.isArray(section.data) ? section.data : []).map((row) => ({
+      date: row.date,
+      values: idx.map((i) => row.values?.[i] ?? 0),
+    })),
+  };
+}
+
+function TotalTooltip({ active, payload, label, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const seen = new Set();
+  const uniquePayload = payload.filter((p) => {
+    if (seen.has(p.dataKey)) return false;
+    seen.add(p.dataKey);
+    return true;
+  });
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography
+        sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary", mb: 0.5 }}
+      >
+        {label}
+      </Typography>
+      {uniquePayload.map((p) => (
+        <Stack
+          key={p.dataKey}
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          sx={{ mb: 0.25 }}
+        >
+          <Box
+            sx={{
+              width: 7,
+              height: 7,
+              borderRadius: "2px",
+              bgcolor: p.color,
+              flexShrink: 0,
+            }}
+          />
+          <Typography sx={{ fontSize: 11.5, color: "text.primary" }}>
+            {p.dataKey}: <b>{formatAmount(p.value)}</b>
+          </Typography>
+        </Stack>
+      ))}
+    </Box>
+  );
+}
+
+function LegendItem({ color, label }) {
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: color }} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}>
+        {label}
+      </Typography>
+    </Stack>
+  );
+}
+
+export default function TotalDepositsTrendPanel({
+  totalTrendSection,
+  demandSection,
+  timeSection,
+  icon,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  // null = Level 0. "demand" | "time" = Level 1/2 (DateWiseBarPanel).
+  const [drillTarget, setDrillTarget] = useState(null);
+
+  // Per date: sum Demand-subType values and Time-subType values; Total = both.
+  const rows = useMemo(() => {
+    const products = Array.isArray(totalTrendSection?.products)
+      ? totalTrendSection.products
+      : [];
+    if (!Array.isArray(totalTrendSection?.data)) return [];
+    const buckets = products.map(bucketFor);
+    return totalTrendSection.data.map((row) => {
+      let demand = 0;
+      let time = 0;
+      buckets.forEach((bucket, i) => {
+        const v = Number(row.values?.[i]) || 0;
+        if (bucket === "demand") demand += v;
+        else if (bucket === "time") time += v;
+      });
+      return {
+        date: formatDateLabel(row.date),
+        [DEMAND_LABEL]: demand,
+        [TIME_LABEL]: time,
+        Total: demand + time,
+      };
+    });
+  }, [totalTrendSection]);
+
+  const hasData = rows.length > 0;
+
+  if (drillTarget) {
+    const section =
+      drillTarget === "demand"
+        ? demandSection ||
+          subSectionFor(totalTrendSection, "demand", DEMAND_LABEL)
+        : timeSection || subSectionFor(totalTrendSection, "time", TIME_LABEL);
+    return (
+      <DateWiseBarPanel
+        section={section}
+        icon={icon}
+        titleOverride={drillTarget === "demand" ? DEMAND_LABEL : TIME_LABEL}
+        onBackToParent={() => setDrillTarget(null)}
+        panelId={panelId}
+        selectedPanel={selectedPanel}
+        onSelectPanel={onSelectPanel}
+      />
+    );
+  }
+
+  return (
+    <GlassPanel
+      sx={{ p: 3 }}
+      selected={selectedPanel === panelId}
+      onClick={() => onSelectPanel?.(panelId)}
+    >
+      <PanelHeader
+        icon={icon}
+        title={totalTrendSection?.title || "Total Deposits"}
+      />
+
+      {hasData ? (
+        <Box
+          sx={{
+            width: "100%",
+            height: 240,
+            "& svg:focus, & svg *:focus": { outline: "none" },
+          }}
+        >
+          <ResponsiveContainer>
+            <ComposedChart
+              data={rows}
+              margin={{ top: 20, right: 8, left: -4, bottom: 6 }}
+              barCategoryGap="30%"
+              barGap={2}
+            >
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={30}
+              />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 11, fill: TOTAL_LINE_COLOR }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+              <Tooltip
+                cursor={{ fill: alpha(theme.palette.text.primary, 0.05) }}
+                content={(props) => <TotalTooltip {...props} theme={theme} />}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey={DEMAND_LABEL}
+                fill={DEMAND_COLOR}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                cursor="pointer"
+                onClick={() => setDrillTarget("demand")}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey={TIME_LABEL}
+                fill={TIME_COLOR}
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                cursor="pointer"
+                onClick={() => setDrillTarget("time")}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="Total"
+                stroke={TOTAL_LINE_COLOR}
+                strokeWidth={2}
+                dot={{ r: 3, fill: TOTAL_LINE_COLOR, strokeWidth: 0 }}
+                isAnimationActive={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>
+          No data available.
+        </Typography>
+      )}
+
+      <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
+        <LegendItem color={DEMAND_COLOR} label={DEMAND_LABEL} />
+        <LegendItem color={TIME_COLOR} label={TIME_LABEL} />
+        <LegendItem color={TOTAL_LINE_COLOR} label="Total (right axis)" />
+      </Stack>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  TrendBubbleChart.jsx                                                   */
+/*  View-only bubble chart for Demand / Time Deposits. Shows ONLY the      */
+/*  most recent date: one bubble per product, X = product, Y = amount,     */
+/*  size = amount. "As of <date>" is shown under the title.               */
+/* ---------------------------------------------------------------------- */
+
+import React, { useMemo } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
+import {
+  CartesianGrid,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
+  ResponsiveContainer,
+} from "recharts";
+import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+import { getColor, formatAmount, formatDateLabel, parseTrendDate } from "./utils";
+import { WrappedAxisTick } from "./BarChart";
+
+/** The most recent row by date (doesn't rely on the API's ordering). */
+function latestRow(rows) {
+  let best = null;
+  let bestTime = -Infinity;
+  rows.forEach((row, i) => {
+    const d = parseTrendDate(row?.date);
+    const t = d ? d.getTime() : i; // unparseable -> array position
+    if (best === null || t >= bestTime) {
+      best = row;
+      bestTime = t;
+    }
+  });
+  return best;
+}
+
+function BubbleTooltip({ active, payload, theme }) {
+  if (!active || !payload || !payload.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+  return (
+    <Box
+      sx={{
+        background: glass.panel(0.92),
+        backdropFilter: "blur(16px) saturate(160%)",
+        border: `1px solid ${glass.border}`,
+        borderRadius: RADIUS.sm,
+        px: 1.5,
+        py: 1,
+        boxShadow: theme.shadows[8],
+      }}
+    >
+      <Typography sx={{ fontSize: 11.5, fontWeight: 600, color: "text.secondary" }}>
+        {point.dateLabel}
+      </Typography>
+      <Typography sx={{ fontSize: 13, fontWeight: 800, color: point.__color }}>
+        {point.name}
+      </Typography>
+      <Typography sx={{ fontSize: 13, fontWeight: 700, color: "text.primary" }}>
+        {formatAmount(point.value)}
+      </Typography>
+    </Box>
+  );
+}
+
+export default function TrendBubbleChart({
+  section,
+  icon,
+  panelId,
+  selectedPanel,
+  onSelectPanel,
+}) {
+  const theme = useTheme();
+  const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
+
+  const products = Array.isArray(section?.products) ? section.products : [];
+  const dataRows = Array.isArray(section?.data) ? section.data : [];
+
+  const colorForProduct = useMemo(() => {
+    const map = new Map(
+      products.map((p, i) => [p.name, getColor(p.name, i, theme)]),
+    );
+    return (name) => map.get(name) || getColor(name, 0, theme);
+  }, [products, theme]);
+
+  // Only the most recent date is plotted.
+  const recentRow = useMemo(() => latestRow(dataRows), [dataRows]);
+  const recentDateLabel = recentRow ? formatDateLabel(recentRow.date) : null;
+
+  // One single-point series per product (one color + legend entry each).
+  const seriesByProduct = useMemo(() => {
+    if (!recentRow) return [];
+    return products.map((p, i) => ({
+      name: p.name,
+      color: colorForProduct(p.name),
+      points: [
+        {
+          product: p.name,
+          dateLabel: formatDateLabel(recentRow.date),
+          value: recentRow.values?.[i] ?? 0,
+          name: p.name,
+          __color: colorForProduct(p.name),
+        },
+      ],
+    }));
+  }, [products, recentRow, colorForProduct]);
+
+  const hasData = seriesByProduct.length > 0;
+
+  return (
+    <GlassPanel
+      sx={{ p: 3 }}
+      selected={selectedPanel === panelId}
+      onClick={() => onSelectPanel?.(panelId)}
+    >
+      <PanelHeader icon={icon} title={section?.title || "—"} />
+      {recentDateLabel && (
+        <Typography sx={{ ...textSecondarySx, fontSize: 11.5, mt: -1.25, mb: 1 }}>
+          As of {recentDateLabel}
+        </Typography>
+      )}
+
+      {hasData ? (
+        <Box
+          sx={{
+            width: "100%",
+            height: 220,
+            "& svg:focus, & svg *:focus": { outline: "none" },
+          }}
+        >
+          <ResponsiveContainer>
+            <ScatterChart margin={{ top: 20, right: 16, left: -4, bottom: 6 }}>
+              <CartesianGrid
+                vertical={false}
+                stroke={gridStrokeColor}
+                strokeDasharray="3 5"
+              />
+              <XAxis
+                dataKey="product"
+                type="category"
+                allowDuplicatedCategory={false}
+                tick={(props) => (
+                  <WrappedAxisTick {...props} fill={theme.palette.text.secondary} />
+                )}
+                axisLine={{ stroke: gridStrokeColor }}
+                tickLine={false}
+                interval={0}
+                height={36}
+              />
+              <YAxis
+                dataKey="value"
+                tick={{ fontSize: 11, fill: theme.palette.text.secondary }}
+                axisLine={false}
+                tickLine={false}
+                width={32}
+              />
+              <ZAxis dataKey="value" range={[80, 340]} />
+              <Tooltip
+                cursor={{ strokeDasharray: "3 3" }}
+                content={(props) => <BubbleTooltip {...props} theme={theme} />}
+              />
+              {seriesByProduct.map((s) => (
+                <Scatter
+                  key={s.name}
+                  name={s.name}
+                  data={s.points}
+                  fill={s.color}
+                  fillOpacity={0.75}
+                  isAnimationActive={false}
+                />
+              ))}
+            </ScatterChart>
+          </ResponsiveContainer>
+        </Box>
+      ) : (
+        <Typography sx={{ ...textSecondarySx, fontSize: 12.5 }}>
+          No data available.
+        </Typography>
+      )}
+
+      <Box
+        sx={{
+          mt: 1.5,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+          rowGap: 0.75,
+          columnGap: 1.5,
+        }}
+      >
+        {products.map((p) => (
+          <Stack key={p.name} direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                bgcolor: colorForProduct(p.name),
+                flexShrink: 0,
+              }}
+            />
+            <Typography
+              sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
+              noWrap
+            >
+              {p.name}
+            </Typography>
+          </Stack>
+        ))}
+      </Box>
+    </GlassPanel>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ---------------------------------------------------------------------- */
+/*  DepositsLoansDashboard.jsx — root component                            */
+/*  Purely presentational. Static data comes from `data`; all trend data   */
+/*  comes from `trendSections` (/DS/dashboard/trend-data via trendApi.js). */
+/*  - Demand/Time Deposits: bubble charts, most recent date only.         */
+/*  - Loan Distribution: DateWiseBarPanel (unchanged).                    */
+/*  - Total Deposits: Demand vs Time bars + Total line, full row.         */
+/*  - CASA Trend chart removed (CASA gauge stays).                        */
+/* ---------------------------------------------------------------------- */
+
+import React, { useState } from "react";
+import { Box, Stack, Typography } from "@mui/material";
+import AccountBalanceRoundedIcon from "@mui/icons-material/AccountBalanceRounded";
+import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
+import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
+import { textPrimarySx, textSecondarySx } from "./common";
+import HeatTree from "./HeatTree";
+import Gauge from "./Gauge";
+import DateWiseBarPanel from "./DateWiseBarPanel";
+import TrendBubbleChart from "./TrendBubbleChart";
+import TotalDepositsTrendPanel from "./TotalDepositsTrendPanel";
+
+/** Page title/subtitle (currently not rendered — see below). */
+function DashboardHeader({ config }) {
+  return (
+    <Stack
+      direction={{ xs: "column", lg: "row" }}
+      alignItems={{ xs: "flex-start", lg: "center" }}
+      justifyContent="space-between"
+      spacing={2}
+      sx={{ px: 0.5 }}
+    >
+      <Box>
+        <Typography
+          sx={{ ...textPrimarySx, fontSize: { xs: 20, md: 24 }, fontWeight: 700 }}
+        >
+          {config.title}
+        </Typography>
+        {config.subtitle && (
+          <Typography sx={{ ...textSecondarySx, fontSize: 13, mt: 0.25 }}>
+            {config.subtitle}
+          </Typography>
+        )}
+      </Box>
+    </Stack>
+  );
+}
+
+/** First section matching any of the given keys — supports both new API
+ * keys ("loans", "totalDeposits") and old ones ("loansBreakdown"). */
+function trendSection(trendSections, ...keys) {
+  for (const key of keys) {
+    const found = trendSections?.find((s) => s.key === key);
+    if (found) return found;
+  }
+  return undefined;
+}
+
+export default function DepositsLoansDashboard({ data, trendSections }) {
+  const [selectedPanel, setSelectedPanel] = useState(null);
+
+  if (!data) return null;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2.5,
+        minHeight: "90vh",
+      }}
+    >
+      {/* <DashboardHeader config={data.header} /> */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "3fr 2fr" },
+          gap: 2.5,
+        }}
+      >
+        <HeatTree
+          config={data.depositsComposition}
+          icon={AccountBalanceRoundedIcon}
+          gradientDark="#4f0e68"
+          gradientLight="#ea80ff"
+          shareLabel="of deposits"
+          panelId="deposits-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <HeatTree
+          config={data.loansComposition}
+          icon={AccountBalanceWalletRoundedIcon}
+          gradientDark="#086083"
+          gradientLight="#9ee7fd"
+          shareLabel="of loans"
+          panelId="loans-treemap"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "3fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <DateWiseBarPanel
+          icon={TrendingUpRoundedIcon}
+          section={trendSection(trendSections, "loans", "loansBreakdown")}
+          panelId="loan-distribution-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <Gauge
+          config={data.casaGauge}
+          panelId="casa-gauge"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          gap: 2.5,
+        }}
+      >
+        <TrendBubbleChart
+          icon={DescriptionRoundedIcon}
+          section={trendSection(trendSections, "demandDeposits")}
+          panelId="demand-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+        <TrendBubbleChart
+          icon={DescriptionRoundedIcon}
+          section={trendSection(trendSections, "timeDeposits")}
+          panelId="term-deposits-bar"
+          selectedPanel={selectedPanel}
+          onSelectPanel={setSelectedPanel}
+        />
+      </Box>
+
+      <TotalDepositsTrendPanel
+        icon={ShowChartRoundedIcon}
+        totalTrendSection={trendSection(trendSections, "totalDeposits", "totaldeposittrend")}
+        demandSection={trendSection(trendSections, "demandDeposits")}
+        timeSection={trendSection(trendSections, "timeDeposits")}
+        panelId="total-deposits-trend"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
+    </Box>
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
