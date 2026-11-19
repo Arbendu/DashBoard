@@ -25,8 +25,8 @@ import {
   YAxis,
 } from "recharts";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
-import { RADIUS } from "./common";
-import { getColor, formatAmount } from "./utils";
+import { RADIUS } from "./Common";
+import { getColor, formatAmount } from "./Utils";
 
 /** Breaks a label into up to `maxLines` lines of roughly `maxCharsPerLine`
  * characters each, greedily packing whole words per line. If there are
@@ -211,9 +211,6 @@ export default function BarChart({ data, onBarClick }) {
 
 
 
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  BarPanel.jsx                                                           */
 /*  REUSABLE: one panel type, used for every bar-chart section in the      */
@@ -236,10 +233,10 @@ import {
   MiniSelect,
   BackButton,
   textSecondarySx,
-} from "./common";
+} from "./Common";
 import BarChart from "./BarChart";
 import BiaxialLineChart from "./BiaxialLineChart";
-import { getColor } from "./utils";
+import { getColor } from "./Utils";
 
 /** Renders a drill-down view: a title, optional subtitle, a "Back" button,
  * and a bar chart for whatever { title, subtitle, data } it's handed.
@@ -411,10 +408,6 @@ export default function BarPanel({
 
 
 
-
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  BiaxialLineChart.jsx                                                   */
 /*  The alternate view every BarPanel can toggle into (see the icon        */
@@ -442,8 +435,8 @@ import {
   YAxis,
 } from "recharts";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
-import { RADIUS } from "./common";
-import { formatAmount } from "./utils";
+import { RADIUS } from "./Common";
+import { formatAmount } from "./Utils";
 import { wrapLabel, WrappedAxisTick } from "./BarChart";
 
 const AMOUNT_COLOR = "#378ADD"; // left axis — matches the "Amount" legend swatch
@@ -619,8 +612,6 @@ export default function BiaxialLineChart({ data }) {
 
 
 
-
-
 /* ---------------------------------------------------------------------- */
 /*  CasaTrendChart.jsx                                                     */
 /*  A view-only (no click interaction anywhere) filled area + line chart   */
@@ -650,7 +641,7 @@ import {
   YAxis,
 } from "recharts";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
-import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./Common";
 
 const LINE_COLOR = "#2a78d6";
 
@@ -807,10 +798,6 @@ export default function CasaTrendChart({
     </GlassPanel>
   );
 }
-
-
-
-
 
 
 
@@ -1068,9 +1055,6 @@ export function BackButton({ onBack }) {
 
 
 
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  DashboardPage.jsx — main entry point / the ONE place the real API      */
 /*  gets wired in.                                                        */
@@ -1098,7 +1082,7 @@ import useApi from "../../hooks/useApi"; // adjust path to match your project st
 import DepositsLoansDashboard from "./DepositsLoansDashboard";
 import mapApiToDashboardData from "./MapApiToDashboardData";
 import { mapTrendDataToSections, TREND_DATA_ENDPOINT } from "./trendApi";
-import { textSecondarySx } from "./common";
+import { textSecondarySx } from "./Common";
 
 const DASHBOARD_ENDPOINT = "/DS/dashboard/dashboard-data";
 
@@ -1233,9 +1217,6 @@ export default function DashboardPage() {
 
 
 
-
-
-
 /*  DateWiseBarPanel.jsx                                                   */
 /*  A multi-date panel — replaces the single-snapshot BarPanel for         */
 /*  Demand Deposits, Time Deposits, and Loan Distribution. Two things      */
@@ -1306,22 +1287,12 @@ import {
   BackButton,
   RADIUS,
   textSecondarySx,
-} from "./common";
-import { getColor, formatAmount } from "./utils";
+} from "./Common";
+import { getColor, formatAmount, formatDateLabel } from "./Utils";
 
 const TOTAL_COLOR = "#E3B831"; // the date-wise Total's fixed accent color, in the bar/composed view only
 const DATA_COLOR = "#4f16aa";
 
-/** "2026-09-17" -> "17-Sep", matching the reference screenshot's axis
- * label style. Falls back to the raw string if it doesn't parse (never
- * throws on unexpected date formats). */
-function formatDateLabel(isoDate) {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  return d
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-    .replace(" ", "-");
-}
 
 /** Custom line-chart dot that's actually clickable — recharts' `dot={{onClick}}`
  * shorthand isn't a reliably documented event shape across versions; a
@@ -1967,32 +1938,12 @@ export default function DateWiseBarPanel({
 
 /* ---------------------------------------------------------------------- */
 /*  DepositsLoansDashboard.jsx — root component                            */
-/* ---------------------------------------------------------------------- */
-/*  DepositsLoansDashboard.jsx — root component                            */
-/*  Purely presentational/compositional. Every number on screen comes      */
-/*  from the `data` prop. Nothing is imported or hardcoded here for the    */
-/*  treemaps/gauge — see DashboardPage.jsx for how the real API's          */
-/*  response gets mapped into this shape (mapApiToDashboardData.js).       */
-/*                                                                          */
-/*  Loans section restored — the API now returns a `loans` object. Its     */
-/*  single item list drives both the composition treemap and the          */
-/*  breakdown bar panel below, the same way Deposits does with two         */
-/*  separate demand/time lists.                                           */
-/*                                                                          */
-/*  DEMAND/TIME DEPOSITS — per request, these two are now TrendBubbleChart */
-/*  (view-only bubble/scatter, no click interaction), replacing            */
-/*  DateWiseBarPanel in these two slots specifically.                     */
-/*                                                                          */
-/*  LOAN DISTRIBUTION — still DateWiseBarPanel (multi-date, drill-         */
-/*  downable, bar/biaxial-line toggle), unchanged.                        */
-/*                                                                          */
-/*  NEW — Total Deposits Trend (3-level drill: composed chart -> Demand/   */
-/*  Time 7-day overview -> single-day breakdown; see                       */
-/*  TotalDepositsTrendPanel.jsx) and CASA Trend (view-only filled area      */
-/*  chart; see CasaTrendChart.jsx), added as a new row below.              */
-/*                                                                          */
-/*  All trend data comes from the `trendSections` prop — the real          */
-/*  /DS/dashboard/trend-data response, mapped by trendApi.js.             */
+/*  Purely presentational. Static data comes from `data`; all trend data   */
+/*  comes from `trendSections` (/DS/dashboard/trend-data via trendApi.js). */
+/*  - Demand/Time Deposits: bubble charts, most recent date only.         */
+/*  - Loan Distribution: DateWiseBarPanel (unchanged).                    */
+/*  - Total Deposits: Demand vs Time bars + Total line, full row.         */
+/*  - CASA Trend chart removed (CASA gauge stays).                        */
 /* ---------------------------------------------------------------------- */
 
 import React, { useState } from "react";
@@ -2002,17 +1953,14 @@ import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceW
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import TrendingUpRoundedIcon from "@mui/icons-material/TrendingUpRounded";
 import ShowChartRoundedIcon from "@mui/icons-material/ShowChartRounded";
-import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
-import { textPrimarySx, textSecondarySx } from "./common";
+import { textPrimarySx, textSecondarySx } from "./Common";
 import HeatTree from "./HeatTree";
 import Gauge from "./Gauge";
 import DateWiseBarPanel from "./DateWiseBarPanel";
 import TrendBubbleChart from "./TrendBubbleChart";
 import TotalDepositsTrendPanel from "./TotalDepositsTrendPanel";
-import CasaTrendChart from "./CasaTrendChart";
 
-/** Page title/subtitle. Only used once, kept inline rather than as its
- * own file. */
+/** Page title/subtitle (currently not rendered — see below). */
 function DashboardHeader({ config }) {
   return (
     <Stack
@@ -2042,32 +1990,16 @@ function DashboardHeader({ config }) {
   );
 }
 
-/** Looks up one trend section by its `key` from the trendSections prop —
- * same lookup pattern as before, just reading from a prop (the real API
- * response) instead of an imported mock file. */
-function trendSection(trendSections, key) {
-  return trendSections?.find((s) => s.key === key);
+/** First section matching any of the given keys — supports both new API
+ * keys ("loans", "totalDeposits") and old ones ("loansBreakdown"). */
+function trendSection(trendSections, ...keys) {
+  for (const key of keys) {
+    const found = trendSections?.find((s) => s.key === key);
+    if (found) return found;
+  }
+  return undefined;
 }
 
-/**
- * Props:
- *  - data: {
- *      header: { title, subtitle },
- *      casaGauge: { title, subtitle, value: number | null, centerLabel, bands?: { low, high } },
- *      depositsComposition: {
- *        title, subtitle,
- *        items: { name, value, share, type }[],
- *        legend: { name }[],
- *        filterOptions?: string[], activeFilter?: string,
- *      },
- *      loansComposition: { title, subtitle, items, legend, filterOptions?, activeFilter? },
- *    }
- *    (demandDeposits/termDeposits/loansBreakdown are not read from `data`
- *    — see `trendSections` below.)
- *  - trendSections: { key, title, products, data }[] — from
- *    /DS/dashboard/trend-data via trendApi.js's mapTrendDataToSections().
- *    Looked up by `key` for each of the three DateWiseBarPanel calls below.
- */
 export default function DepositsLoansDashboard({ data, trendSections }) {
   const [selectedPanel, setSelectedPanel] = useState(null);
 
@@ -2082,8 +2014,6 @@ export default function DepositsLoansDashboard({ data, trendSections }) {
         minHeight: "90vh",
       }}
     >
-      {/* Header not needed for now — commented out, not deleted. Uncomment
-          to bring it back. */}
       {/* <DashboardHeader config={data.header} /> */}
       <Box
         sx={{
@@ -2123,7 +2053,7 @@ export default function DepositsLoansDashboard({ data, trendSections }) {
       >
         <DateWiseBarPanel
           icon={TrendingUpRoundedIcon}
-          section={trendSection(trendSections, "loansBreakdown")}
+          section={trendSection(trendSections, "loans", "loansBreakdown")}
           panelId="loan-distribution-bar"
           selectedPanel={selectedPanel}
           onSelectPanel={setSelectedPanel}
@@ -2159,35 +2089,22 @@ export default function DepositsLoansDashboard({ data, trendSections }) {
         />
       </Box>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", md: "3.5fr 1.5fr" },
-          gap: 2.5,
-        }}
-      >
-        <TotalDepositsTrendPanel
-          icon={ShowChartRoundedIcon}
-          totalTrendSection={trendSection(trendSections, "totaldeposittrend")}
-          demandSection={trendSection(trendSections, "demandDeposits")}
-          timeSection={trendSection(trendSections, "timeDeposits")}
-          panelId="total-deposits-trend"
-          selectedPanel={selectedPanel}
-          onSelectPanel={setSelectedPanel}
-        />
-        <CasaTrendChart
-          icon={PieChartRoundedIcon}
-          section={trendSection(trendSections, "casatrend")}
-          panelId="casa-trend"
-          selectedPanel={selectedPanel}
-          onSelectPanel={setSelectedPanel}
-        />
-      </Box>
+      <TotalDepositsTrendPanel
+        icon={ShowChartRoundedIcon}
+        totalTrendSection={trendSection(
+          trendSections,
+          "totalDeposits",
+          "totaldeposittrend",
+        )}
+        demandSection={trendSection(trendSections, "demandDeposits")}
+        timeSection={trendSection(trendSections, "timeDeposits")}
+        panelId="total-deposits-trend"
+        selectedPanel={selectedPanel}
+        onSelectPanel={setSelectedPanel}
+      />
     </Box>
   );
 }
-
-
 
 
 
@@ -2221,7 +2138,7 @@ import { Box, Stack, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import PieChartRoundedIcon from "@mui/icons-material/PieChartRounded";
-import { GlassPanel, PanelHeader, textSecondarySx } from "./common";
+import { GlassPanel, PanelHeader, textSecondarySx } from "./Common";
 
 const DEFAULT_BANDS = { low: 35, high: 65 };
 
@@ -2434,10 +2351,6 @@ export default function Gauge({
 
 
 
-
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  HeatTree.jsx                                                           */
 /*  A real, area-filling treemap — like the Recharts "Bundle Size          */
@@ -2471,14 +2384,14 @@ import {
   MiniSelect,
   RADIUS,
   textSecondarySx,
-} from "./common";
+} from "./Common";
 import {
   heatColor,
   mixHex,
   getColor,
   buildTreemap,
   formatAmount,
-} from "./utils";
+} from "./Utils";
 
 /** A single treemap cell, positioned by percent within the container. */
 function Tile({ item, x, y, w, h, color, shareLabel, onClick }) {
@@ -2752,9 +2665,6 @@ export default function HeatTree({
 
 
 
-
-
-
 /* ---------------------------------------------------------------------- */
 /*  mapApiToDashboardData.js                                               */
 /*  Translates ONE `staticDashboardData[i]` section from the real API      */
@@ -2778,7 +2688,7 @@ export default function HeatTree({
 /*  directly, so there's no injection surface from this data.             */
 /* ---------------------------------------------------------------------- */
 
-import { formatAmount, normalizeDepositName } from "./utils";
+import { formatAmount, normalizeDepositName } from "./Utils";
 
 /** Coerces `raw` into a finite, non-negative number, or `0` if it can't
  * be trusted (missing, wrong type, NaN, negative). Deposit/loan amounts
@@ -2975,33 +2885,13 @@ export default function mapApiToDashboardData(section) {
 
 
 
-
 /* ---------------------------------------------------------------------- */
 /*  TotalDepositsTrendPanel.jsx                                            */
-/*  Three drill-down levels, all in one panel:                             */
-/*                                                                          */
-/*  LEVEL 0 (default) — a composed chart of the "totaldeposittrend"        */
-/*  section: one bar per day for "Demand Deposit Trends" and one for       */
-/*  "Time Deposit Trends" (grouped, left axis), PLUS a LINE showing the    */
-/*  day's TOTAL (their sum) on an independent right axis. Clicking either  */
-/*  bar TYPE (not a specific day) drills into that type's full 7-day       */
-/*  breakdown — LEVEL 1.                                                  */
-/*                                                                          */
-/*  LEVEL 1 — the real "demandDeposits" or "timeDeposits" trend section's  */
-/*  full multi-category, 7-day overview. This is simply DateWiseBarPanel   */
-/*  embedded here — it already renders exactly this view (grouped bars per */
-/*  date, one per category) and already has its OWN click-to-drill-down    */
-/*  logic for a single day, so nothing about that behavior needed          */
-/*  reimplementing. A `titleOverride` labels it clearly, and              */
-/*  `onBackToParent` gives it an extra Back button (alongside its own      */
-/*  date-drilldown Back button) that returns all the way to Level 0.       */
-/*                                                                          */
-/*  LEVEL 2 — a single day's full category breakdown. This is             */
-/*  DateWiseBarPanel's OWN built-in date-drilldown (click any bar in       */
-/*  Level 1) — already exists, nothing new needed here either.            */
-/*                                                                          */
-/*  So this file only actually implements LEVEL 0; levels 1 and 2 are      */
-/*  DateWiseBarPanel reused as-is.                                        */
+/*  LEVEL 0 — "totalDeposits" section: for EACH DATE the 8 product values  */
+/*  are summed by subType into Demand and Time -> two bars per day (left   */
+/*  axis) + a Total line (right axis). Clicking a bar type drills into     */
+/*  LEVEL 1 (that type's 7-day breakdown via DateWiseBarPanel), which has  */
+/*  its own single-day drill-down (LEVEL 2).                              */
 /* ---------------------------------------------------------------------- */
 
 import React, { useMemo, useState } from "react";
@@ -3018,22 +2908,42 @@ import {
   YAxis,
 } from "recharts";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
-import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
-import { formatAmount } from "./utils";
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./Common";
+import { formatAmount, formatDateLabel } from "./Utils";
 import DateWiseBarPanel from "./DateWiseBarPanel";
 
 const DEMAND_COLOR = "#2a78d6";
 const TIME_COLOR = "#6250d6";
 const TOTAL_LINE_COLOR = "#eb6834";
 
-/** "2026-09-17" -> "17-Sep", matching every other trend chart's axis
- * label style in this dashboard. */
-function formatDateLabel(isoDate) {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  return d
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-    .replace(" ", "-");
+const DEMAND_LABEL = "Demand Deposits";
+const TIME_LABEL = "Time Deposits";
+
+/** "demand" | "time" | null, from the product's subType (falls back to type). */
+function bucketFor(product) {
+  const tag = String(product?.subType || product?.type || "").toLowerCase();
+  if (tag.includes("demand")) return "demand";
+  if (tag.includes("time") || tag.includes("term")) return "time";
+  return null;
+}
+
+/** Sub-section with only one bucket's products — fallback for the Level 1
+ * drill-down if the API omits demandDeposits/timeDeposits. */
+function subSectionFor(section, bucket, title) {
+  if (!section) return undefined;
+  const products = Array.isArray(section.products) ? section.products : [];
+  const idx = products
+    .map((p, i) => (bucketFor(p) === bucket ? i : -1))
+    .filter((i) => i >= 0);
+  return {
+    key: `${section.key || "total"}-${bucket}`,
+    title,
+    products: idx.map((i) => products[i]),
+    data: (Array.isArray(section.data) ? section.data : []).map((row) => ({
+      date: row.date,
+      values: idx.map((i) => row.values?.[i] ?? 0),
+    })),
+  };
 }
 
 function TotalTooltip({ active, payload, label, theme }) {
@@ -3092,19 +3002,17 @@ function TotalTooltip({ active, payload, label, theme }) {
   );
 }
 
-/**
- * Props:
- *  - totalTrendSection: { title, products: [{name}, {name}], data: {date, values:[demand,time]}[] }
- *    — the "totaldeposittrend" trend-data section (see trendApi.js).
- *    `products[0]` is assumed to be the Demand figure, `products[1]` the
- *    Time figure — matching the order the API sends them in.
- *  - demandSection / timeSection: the real "demandDeposits" / "timeDeposits"
- *    trend-data sections — passed straight through to an embedded
- *    DateWiseBarPanel when the user drills into one.
- *  - icon: MUI icon component for the panel header.
- *  - panelId / selectedPanel / onSelectPanel: click-to-highlight wiring
- *    for the CARD itself, shared with every other panel.
- */
+function LegendItem({ color, label }) {
+  return (
+    <Stack direction="row" spacing={0.75} alignItems="center">
+      <Box sx={{ width: 8, height: 8, borderRadius: "2px", bgcolor: color }} />
+      <Typography sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}>
+        {label}
+      </Typography>
+    </Stack>
+  );
+}
+
 export default function TotalDepositsTrendPanel({
   totalTrendSection,
   demandSection,
@@ -3117,43 +3025,46 @@ export default function TotalDepositsTrendPanel({
   const theme = useTheme();
   const gridStrokeColor = alpha(theme.palette.text.primary, 0.08);
 
-  // null = Level 0 (this panel's own composed chart). "demand" | "time" =
-  // Level 1/2, delegated entirely to an embedded DateWiseBarPanel.
+  // null = Level 0. "demand" | "time" = Level 1/2 (DateWiseBarPanel).
   const [drillTarget, setDrillTarget] = useState(null);
 
-  const products = Array.isArray(totalTrendSection?.products)
-    ? totalTrendSection.products
-    : [];
-  const demandLabel = products[0]?.name || "Demand Deposit Trends";
-  const timeLabel = products[1]?.name || "Time Deposit Trends";
-
+  // Per date: sum Demand-subType values and Time-subType values; Total = both.
   const rows = useMemo(() => {
+    const products = Array.isArray(totalTrendSection?.products)
+      ? totalTrendSection.products
+      : [];
     if (!Array.isArray(totalTrendSection?.data)) return [];
+    const buckets = products.map(bucketFor);
     return totalTrendSection.data.map((row) => {
-      const demand = row.values?.[0] ?? 0;
-      const time = row.values?.[1] ?? 0;
+      let demand = 0;
+      let time = 0;
+      buckets.forEach((bucket, i) => {
+        const v = Number(row.values?.[i]) || 0;
+        if (bucket === "demand") demand += v;
+        else if (bucket === "time") time += v;
+      });
       return {
         date: formatDateLabel(row.date),
-        [demandLabel]: demand,
-        [timeLabel]: time,
+        [DEMAND_LABEL]: demand,
+        [TIME_LABEL]: time,
         Total: demand + time,
       };
     });
-  }, [totalTrendSection, demandLabel, timeLabel]);
+  }, [totalTrendSection]);
 
   const hasData = rows.length > 0;
 
-  // Level 1/2 — delegate entirely to DateWiseBarPanel, which already has
-  // its own overview + single-day drill-down built in.
   if (drillTarget) {
-    const section = drillTarget === "demand" ? demandSection : timeSection;
+    const section =
+      drillTarget === "demand"
+        ? demandSection ||
+          subSectionFor(totalTrendSection, "demand", DEMAND_LABEL)
+        : timeSection || subSectionFor(totalTrendSection, "time", TIME_LABEL);
     return (
       <DateWiseBarPanel
         section={section}
         icon={icon}
-        titleOverride={
-          drillTarget === "demand" ? demandLabel.trim() : timeLabel.trim()
-        }
+        titleOverride={drillTarget === "demand" ? DEMAND_LABEL : TIME_LABEL}
         onBackToParent={() => setDrillTarget(null)}
         panelId={panelId}
         selectedPanel={selectedPanel}
@@ -3162,7 +3073,6 @@ export default function TotalDepositsTrendPanel({
     );
   }
 
-  // Level 0 — this panel's own composed chart.
   return (
     <GlassPanel
       sx={{ p: 3 }}
@@ -3171,7 +3081,7 @@ export default function TotalDepositsTrendPanel({
     >
       <PanelHeader
         icon={icon}
-        title={totalTrendSection?.title || "Total Deposit Trends"}
+        title={totalTrendSection?.title || "Total Deposits"}
       />
 
       {hasData ? (
@@ -3223,7 +3133,7 @@ export default function TotalDepositsTrendPanel({
               />
               <Bar
                 yAxisId="left"
-                dataKey={demandLabel}
+                dataKey={DEMAND_LABEL}
                 fill={DEMAND_COLOR}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={26}
@@ -3232,7 +3142,7 @@ export default function TotalDepositsTrendPanel({
               />
               <Bar
                 yAxisId="left"
-                dataKey={timeLabel}
+                dataKey={TIME_LABEL}
                 fill={TIME_COLOR}
                 radius={[4, 4, 0, 0]}
                 maxBarSize={26}
@@ -3258,51 +3168,9 @@ export default function TotalDepositsTrendPanel({
       )}
 
       <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "2px",
-              bgcolor: DEMAND_COLOR,
-            }}
-          />
-          <Typography
-            sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
-          >
-            {demandLabel.trim()}
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "2px",
-              bgcolor: TIME_COLOR,
-            }}
-          />
-          <Typography
-            sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
-          >
-            {timeLabel.trim()}
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={0.75} alignItems="center">
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "2px",
-              bgcolor: TOTAL_LINE_COLOR,
-            }}
-          />
-          <Typography
-            sx={{ ...textSecondarySx, fontSize: 11, fontWeight: 500 }}
-          >
-            Total (right axis)
-          </Typography>
-        </Stack>
+        <LegendItem color={DEMAND_COLOR} label={DEMAND_LABEL} />
+        <LegendItem color={TIME_COLOR} label={TIME_LABEL} />
+        <LegendItem color={TOTAL_LINE_COLOR} label="Total (right axis)" />
       </Stack>
     </GlassPanel>
   );
@@ -3318,28 +3186,16 @@ export default function TotalDepositsTrendPanel({
 
 /* ---------------------------------------------------------------------- */
 /*  trendApi.js                                                            */
-/*  Everything related to the GET /DS/dashboard/trend-data endpoint lives  */
-/*  here — the endpoint path, and mapTrendDataToSections(), which turns    */
-/*  the raw API response into the exact { key, title, products, data }[]  */
-/*  shape DateWiseBarPanel already consumes (matches bankingData.json's    */
-/*  shape exactly, so DateWiseBarPanel itself needs no changes).           */
-/*                                                                          */
-/*  SECURITY / ROBUSTNESS — same reasoning as mapApiToDashboardData.js:    */
-/*  this is the one place this endpoint's raw, untrusted response gets     */
-/*  validated before anything else sees it. Every field is type-checked    */
-/*  and range-clamped so a malformed response can never crash the          */
-/*  dashboard — a bad section is dropped rather than throwing.            */
+/*  GET /DS/dashboard/trend-data — endpoint path + response mapping into   */
+/*  { key, title, products, data }[] sections. Validates everything so a   */
+/*  malformed response can never crash the dashboard.                     */
 /* ---------------------------------------------------------------------- */
 
-import { normalizeDepositName } from "./utils";
+import { normalizeDepositName, parseTrendDate } from "./Utils";
 
 export const TREND_DATA_ENDPOINT = "/DS/dashboard/trend-data";
 
-/** Coerces `raw` into a finite, non-negative number, or 0 if it can't be
- * trusted (missing, wrong type, NaN, negative). Deposit/loan amounts are
- * never legitimately negative, and a stray negative/NaN would otherwise
- * corrupt everything downstream — date-wise totals, axis scaling, the
- * sqrt-based sizing elsewhere in the dashboard. */
+/** Finite, non-negative number, or 0 if it can't be trusted. */
 function toSafeAmount(raw) {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -3354,12 +3210,16 @@ function mapProducts(rawProducts) {
       type: String(p.type || "")
         .replace(/\s+/g, " ")
         .trim(),
+      // Kept so Total Deposits can split products into Demand vs Time.
+      subType: String(p.subType || "")
+        .replace(/\s+/g, " ")
+        .trim(),
+      code: typeof p.code === "string" ? p.code : "",
     }));
 }
 
-/** Every data row's `values` array must line up 1:1 with `products` —
- * pads a short row with 0s and drops extra entries from a long one,
- * rather than trusting the API to always send a matching length. */
+/** Each row's `values` lines up 1:1 with `products` (pads/trims), and rows
+ * are sorted oldest -> newest so the last row is always the latest date. */
 function mapDataRows(rawData, expectedLength) {
   if (!Array.isArray(rawData)) return [];
   return rawData
@@ -3372,16 +3232,20 @@ function mapDataRows(rawData, expectedLength) {
         toSafeAmount(rawValues[i]),
       );
       return { date: row.date, values };
+    })
+    .sort((a, b) => {
+      const da = parseTrendDate(a.date);
+      const db = parseTrendDate(b.date);
+      if (!da || !db) return 0;
+      return da - db;
     });
 }
 
-/** One section: { key, title, products, data } — exactly matching what
- * DateWiseBarPanel/bankingData.json already use. */
-function mapSection(rawSection) {
+function mapSection(rawSection, fallbackKey = "") {
   if (!rawSection || typeof rawSection !== "object") return null;
   const products = mapProducts(rawSection.products);
   return {
-    key: typeof rawSection.key === "string" ? rawSection.key : "",
+    key: typeof rawSection.key === "string" ? rawSection.key : fallbackKey,
     title: typeof rawSection.title === "string" ? rawSection.title : "",
     products,
     data: mapDataRows(rawSection.data, products.length),
@@ -3389,17 +3253,28 @@ function mapSection(rawSection) {
 }
 
 /**
- * @param {unknown} rawResponseData — the raw `response.data` array from
- *   GET /DS/dashboard/trend-data (an array of sections).
- * @returns { key, title, products, data }[] — same shape as
- *   bankingData.json, safe to pass straight into DateWiseBarPanel. Never
- *   throws; a malformed section is simply dropped rather than crashing
- *   the whole page.
+ * @param rawResponseData — response.data from /DS/dashboard/trend-data:
+ *   { trendsDashboardData: { YSA: { totalDeposits, demandDeposits,
+ *   timeDeposits, loans } } }, or a plain array of sections (old shape).
  */
 export function mapTrendDataToSections(rawResponseData) {
-  if (!Array.isArray(rawResponseData)) return [];
-  return rawResponseData.map(mapSection).filter(Boolean);
+  // Old shape: an array of sections.
+  if (Array.isArray(rawResponseData)) {
+    return rawResponseData.map((sec) => mapSection(sec)).filter(Boolean);
+  }
+  // New shape: an object of sections under trendsDashboardData.YSA
+  // (falls back to the first branch if "YSA" isn't present).
+  const container = rawResponseData?.trendsDashboardData;
+  if (!container || typeof container !== "object") return [];
+  const branch =
+    container.YSA ??
+    Object.values(container).find((v) => v && typeof v === "object");
+  if (!branch || typeof branch !== "object") return [];
+  return Object.entries(branch)
+    .map(([key, sec]) => mapSection(sec, key))
+    .filter(Boolean);
 }
+
 
 
 
@@ -3413,23 +3288,9 @@ export function mapTrendDataToSections(rawResponseData) {
 
 /* ---------------------------------------------------------------------- */
 /*  TrendBubbleChart.jsx                                                   */
-/*  A view-only (no click interaction anywhere) bubble/scatter chart —      */
-/*  replaces DateWiseBarPanel for Demand Deposits and Time Deposits per    */
-/*  request, matching the reference "bubble size = magnitude" style        */
-/*  (X = date, Y = amount, bubble RADIUS also driven by amount — there's    */
-/*  no independent third metric in this data the way the reference's       */
-/*  "headcount" was, so amount doing double duty for Y position and size   */
-/*  is the closest honest mapping).                                        */
-/*                                                                          */
-/*  One <Scatter> series per category/product, each its own fixed color    */
-/*  (same getColor(name, index, theme) convention as every other chart in  */
-/*  this dashboard, so a category's color stays consistent across the      */
-/*  whole app).                                                           */
-/*                                                                          */
-/*  DATA SHAPE — consumes a trend-data section directly, same as           */
-/*  DateWiseBarPanel:                                                     */
-/*    { title, products: [{name, type}], data: [{date, values}] }         */
-/*  where `values[i]` corresponds to `products[i]`.                       */
+/*  View-only bubble chart for Demand / Time Deposits. Shows ONLY the      */
+/*  most recent date: one bubble per product, X = product, Y = amount,     */
+/*  size = amount. "As of <date>" is shown under the title.               */
 /* ---------------------------------------------------------------------- */
 
 import React, { useMemo } from "react";
@@ -3446,17 +3307,28 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { glass } from "../../theme/themePrimitives"; // adjust path to match your project structure
-import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./common";
-import { getColor, formatAmount } from "./utils";
+import { GlassPanel, PanelHeader, RADIUS, textSecondarySx } from "./Common";
+import {
+  getColor,
+  formatAmount,
+  formatDateLabel,
+  parseTrendDate,
+} from "./Utils";
+import { WrappedAxisTick } from "./BarChart";
 
-/** "2026-09-17" -> "17-Sep", matching every other trend chart's axis
- * label style in this dashboard. */
-function formatDateLabel(isoDate) {
-  const d = new Date(isoDate);
-  if (Number.isNaN(d.getTime())) return isoDate;
-  return d
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
-    .replace(" ", "-");
+/** The most recent row by date (doesn't rely on the API's ordering). */
+function latestRow(rows) {
+  let best = null;
+  let bestTime = -Infinity;
+  rows.forEach((row, i) => {
+    const d = parseTrendDate(row?.date);
+    const t = d ? d.getTime() : i; // unparseable -> array position
+    if (best === null || t >= bestTime) {
+      best = row;
+      bestTime = t;
+    }
+  });
+  return best;
 }
 
 function BubbleTooltip({ active, payload, theme }) {
@@ -3490,15 +3362,6 @@ function BubbleTooltip({ active, payload, theme }) {
   );
 }
 
-/**
- * Props:
- *  - section: { title, products, data: {date, values}[] } — a trend-data
- *    section (see trendApi.js). Same shape DateWiseBarPanel consumes.
- *  - icon: MUI icon component for the panel header.
- *  - panelId / selectedPanel / onSelectPanel: click-to-highlight wiring
- *    for the CARD itself, shared with every other panel — separate from
- *    the chart's own data points, which are not clickable at all.
- */
 export default function TrendBubbleChart({
   section,
   icon,
@@ -3519,25 +3382,29 @@ export default function TrendBubbleChart({
     return (name) => map.get(name) || getColor(name, 0, theme);
   }, [products, theme]);
 
-  // One point array per product — Scatter series each take their own
-  // `data`, unlike Bar/Line which share one chart-level `data` array.
-  const seriesByProduct = useMemo(
-    () =>
-      products.map((p, i) => ({
-        name: p.name,
-        color: colorForProduct(p.name),
-        points: dataRows.map((row) => ({
-          date: formatDateLabel(row.date),
-          dateLabel: formatDateLabel(row.date),
-          value: row.values?.[i] ?? 0,
+  // Only the most recent date is plotted.
+  const recentRow = useMemo(() => latestRow(dataRows), [dataRows]);
+  const recentDateLabel = recentRow ? formatDateLabel(recentRow.date) : null;
+
+  // One single-point series per product (one color + legend entry each).
+  const seriesByProduct = useMemo(() => {
+    if (!recentRow) return [];
+    return products.map((p, i) => ({
+      name: p.name,
+      color: colorForProduct(p.name),
+      points: [
+        {
+          product: p.name,
+          dateLabel: formatDateLabel(recentRow.date),
+          value: recentRow.values?.[i] ?? 0,
           name: p.name,
           __color: colorForProduct(p.name),
-        })),
-      })),
-    [products, dataRows, colorForProduct],
-  );
+        },
+      ],
+    }));
+  }, [products, recentRow, colorForProduct]);
 
-  const hasData = seriesByProduct.some((s) => s.points.length > 0);
+  const hasData = seriesByProduct.length > 0;
 
   return (
     <GlassPanel
@@ -3546,6 +3413,13 @@ export default function TrendBubbleChart({
       onClick={() => onSelectPanel?.(panelId)}
     >
       <PanelHeader icon={icon} title={section?.title || "—"} />
+      {recentDateLabel && (
+        <Typography
+          sx={{ ...textSecondarySx, fontSize: 11.5, mt: -1.25, mb: 1 }}
+        >
+          As of {recentDateLabel}
+        </Typography>
+      )}
 
       {hasData ? (
         <Box
@@ -3563,12 +3437,19 @@ export default function TrendBubbleChart({
                 strokeDasharray="3 5"
               />
               <XAxis
-                dataKey="date"
+                dataKey="product"
                 type="category"
                 allowDuplicatedCategory={false}
-                tick={{ fontSize: 10, fill: theme.palette.text.secondary }}
+                tick={(props) => (
+                  <WrappedAxisTick
+                    {...props}
+                    fill={theme.palette.text.secondary}
+                  />
+                )}
                 axisLine={{ stroke: gridStrokeColor }}
                 tickLine={false}
+                interval={0}
+                height={36}
               />
               <YAxis
                 dataKey="value"
@@ -3638,9 +3519,6 @@ export default function TrendBubbleChart({
     </GlassPanel>
   );
 }
-
-
-
 
 
 
@@ -3769,6 +3647,37 @@ export function formatAmount(value) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+
+/* ---- Trend dates -----------------------------------------------------
+ * The trend-data API sends dates as "DD-MM-YYYY" (e.g. "14-04-2026").
+ * new Date("12-04-2026") is NOT safe — it gets read as 4 Dec. So dates
+ * are parsed explicitly. ISO "YYYY-MM-DD" is still accepted. */
+
+export function parseTrendDate(raw) {
+  const str = String(raw ?? "").trim();
+  let m = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/); // DD-MM-YYYY
+  if (m) {
+    const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // YYYY-MM-DD
+  if (m) {
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+}
+
+/** "14-04-2026" (or "2026-04-14") -> "14-Apr". Never throws. */
+export function formatDateLabel(rawDate) {
+  const d = parseTrendDate(rawDate);
+  if (!d) return String(rawDate ?? "");
+  return d
+    .toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
+    .replace(" ", "-");
+}
+
 
 /* ---- Name normalization --------------------------------------------------
  * The API sends some category names with inconsistent casing/whitespace
