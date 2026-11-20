@@ -313,3 +313,24 @@ export default function DashboardPage() {
   );
 }
 
+
+
+
+
+
+
+
+
+
+
+
+const DOTS = [
+  { color: "#142D4E", d: 13 }, // Deep Navy
+  { color: "#1E3A5F", d: 15 }, // Navy Blue
+  { color: "#254B70", d: 12 }, // Steel Blue
+  { color: "#285B78", d: 14 }, // Ocean Blue
+  { color: "#176B70", d: 11 }, // Deep Teal
+  { color: "#276C7A", d: 13 }, // Teal
+  { color: "#454B85", d: 16 }, // Indigo
+  { color: "#62558A", d: 12 }, // Muted Purple
+];
