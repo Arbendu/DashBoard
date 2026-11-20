@@ -334,3 +334,25 @@ const DOTS = [
   { color: "#454B85", d: 16 }, // Indigo
   { color: "#62558A", d: 12 }, // Muted Purple
 ];
+
+
+
+
+
+
+
+
+
+
+
+
+        ...(fullScreen
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: (theme) => theme.zIndex.modal,
+              backgroundColor: "background.default",
+            }
+          : inline
+            ? null
+            : { minHeight, width: "100%" }),
