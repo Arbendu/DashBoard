@@ -1,1 +1,47 @@
+/* ---- DashboardScrollbarStyles ---------------------------------------------
+ * Custom page & container scrollbar matching the glassmorphic banking theme.
+ * Scoped to the dashboard lifecycle — cleans up automatically on unmount. */
+
+export function DashboardScrollbarStyles() {
+  const theme = useTheme();
+  const trackBg = alpha(theme.palette.text.primary, 0.04);
+  const thumbBg = alpha(theme.palette.primary.main, 0.28);
+  const thumbHoverBg = alpha(theme.palette.primary.main, 0.52);
+  const thumbActiveBg = alpha(theme.palette.primary.main, 0.72);
+
+  return (
+    <GlobalStyles
+      styles={{
+        "html, body, *": {
+          scrollbarWidth: "thin",
+          scrollbarColor: `${thumbBg} ${trackBg}`,
+        },
+        "::-webkit-scrollbar": {
+          width: "8px",
+          height: "8px",
+        },
+        "::-webkit-scrollbar-track": {
+          background: trackBg,
+          borderRadius: "999px",
+        },
+        "::-webkit-scrollbar-thumb": {
+          backgroundColor: thumbBg,
+          borderRadius: "999px",
+          border: "2px solid transparent",
+          backgroundClip: "content-box",
+          transition: "background-color 0.2s ease",
+        },
+        "::-webkit-scrollbar-thumb:hover": {
+          backgroundColor: thumbHoverBg,
+        },
+        "::-webkit-scrollbar-thumb:active": {
+          backgroundColor: thumbActiveBg,
+        },
+        "::-webkit-scrollbar-corner": {
+          background: "transparent",
+        },
+      }}
+    />
+  );
+}
 
